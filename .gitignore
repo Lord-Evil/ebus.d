@@ -1,0 +1,7 @@
+*.o
+*.json
+*.7z
+tmp/*.o
+build/*
+config.json
+eubus-d
