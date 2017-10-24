@@ -4,4 +4,4 @@
 tmp/*.o
 build/*
 config.json
-eubus-d
+ebus-d
