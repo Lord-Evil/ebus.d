@@ -44,12 +44,16 @@
 <script type="text/javascript" src="ebus.js"></script>
 <script type="text/javascript">
 	//test methods
+	var sg;
 	var wURL="ws://"+window.location.host+"/ws";
 	var con=EBus.connect(wURL,()=>{
-		var sg=con.joinGroup("sex");
-		function lol(data){console.log("Invoked")};
+		//var sg=con.joinGroup("sex");
+		sg=con.joinGroup("sex");
+		function lol(event,data,chat){console.log("Invoked",data?"with message: "+data.message:"")};
 		sg.subscribe("huj",lol);
 		sg.invoke("huj");
+		sg.invoke(["huj"]);
+		sg.invoke(["huj","pizda"],{"message":"sexy time!"});
 	});
 	//
 </script>

@@ -39,21 +39,27 @@ import vibe.http.websockets;
 }
 */
 
+bool hasItem(Json[] haystack,string needle){
+	for(int i=0;i<haystack.length;i++){
+		if(haystack[i].type==Json.Type.string&&haystack[i].get!string==needle)
+			return true;
+	}
+	return false;
+}
 
 class BusGroup
 {
 	class Subscription
 	{
-	private:
+		private:
 		WebSocket[string] subscribers;
-	public:
-		protected Json tags;
-		this(Json _tags){
-			tags=_tags;
+		public:
+		protected Json[] tags;
+		this(Json[] _tags){
+			tags=_tags;//Json.Array
 		}
 		void addSubscriber(WebSocket s,string seq){
-			if(seq !in subscribers)
-				subscribers[seq]=s;
+			subscribers[seq]=s;
 		}
 		void removeSubscriber(WebSocket s){
 			string[] keysToRemove;
@@ -75,7 +81,56 @@ class BusGroup
 	this(string _name){
 		name=name;
 	}
-	void addSubscription(Json tags, WebSocket subscriber, string seq){
+	protected WebSocket[] members;//we don't really need this.. but good to be able to count
+	Subscription[] findSubscriptionAll(Json[] tags){
+		Subscription[] list;
+		if(tags.length<1)return list;
+
+		foreach(Subscription sub; subs){
+			bool fits=true;
+			foreach(Json tag;sub.tags){
+				if(tag.type==Json.Type.string){
+					if(!tags.hasItem(tag.get!string)){
+						fits=false;
+						//writeln(tags," do not fit with ",tag);
+						break;
+					}
+				}
+			}
+			if(!fits) continue;
+			list~=sub;
+		}
+		return list;
+	}
+	Subscription findSubscription(Json[] tags){
+		foreach(Subscription sub; subs){
+			bool fits=true;
+			if(tags.length<1||tags.length!=sub.tags.length)
+				continue;
+			foreach(Json tag;tags){
+				if(tag.type==Json.Type.string){
+					if(!sub.tags.hasItem(tag.get!string)){
+						fits=false;
+						break;
+					}
+				}
+			}
+			if(!fits) continue;
+			return sub;
+		}
+		return null;
+	}
+	Subscription addSubscription(Json[] tags, WebSocket subscriber, string seq){
+		Subscription sub=findSubscription(tags);
+		if(sub !is null)
+			sub.addSubscriber(subscriber,seq);
+		else{
+			sub=new Subscription(tags);
+			sub.addSubscriber(subscriber,seq);
+			subs~=sub;
+		}
+		return sub;
+		/*
 		foreach(Subscription sub; subs){
 			bool fits=true;
 			if(tags.length!=sub.tags.length||tags.length==0)
@@ -83,7 +138,9 @@ class BusGroup
 			foreach(Json tag;tags){
 				switch (tag.type) {
 					case Json.Type.string:
-
+						if(!sub.tags.hasItem(tag.get!string)){
+							fits=false;
+						}
 						break;
 					case Json.Type.array:
 						break;
@@ -98,18 +155,20 @@ class BusGroup
 					default:
 						continue;//might need to remove bad tag
 				}
+				if(!fits)break;
+			}
+			if(fits){
+
 			}
 		}
+		*/
 	}
 
 }
 
-Json groups;
+BusGroup[string] groups;
 
 void main(){
-	//can not initialize objects in global
-	groups = Json.emptyObject;
-
 	Json config=parseJsonString(cast(string)std.file.read("config.json"));
 	logInfo("Server started!");
 	auto router = new URLRouter;
@@ -132,21 +191,28 @@ void handleConn(scope WebSocket sock)
 	logInfo("Incomming connection! "~sock.request.clientAddress.to!string~" "~sock.request.headers["Sec-WebSocket-Key"]);
 	//logInfo(sock.request.headers);
 	m_socks~=sock;
+	BusGroup.Subscription[] m_subs;
 	while (sock.waitForData()) {
 		string msg = sock.receiveText();
 		Json data;
+		string seqID;
 		try{
 			data = parseJsonString(msg);
 			writeln(data);
+			seqID=data["seq"].get!string;
 		}catch(Exception e){
+			writeln("#####ERROR####");
+			writeln(e.msg);
+			writeln(msg);
+			writeln("##############");
 			continue;
 		}
 
 		// TODO: add data in queue and do stuff in other place
 		if(data["group"].type!=Json.Type.undefined){
 			string group_name = data["group"].get!string;
-			if (groups[group_name].type==Json.Type.undefined){
-				groups[group_name] = Json.emptyObject;
+			if (group_name !in groups){
+				groups[group_name] = new BusGroup(group_name);
 				writeln("Created new group "~group_name);
 			}else{
 				writeln("Existing group "~group_name);
@@ -155,10 +221,23 @@ void handleConn(scope WebSocket sock)
 				string action = data["data"]["action"].get!string;
 				switch(action){
 					case "join":
-						
+						//no real purpose, could be used for member count
 						break;
 					case "subscribe":
-						
+						Json[] tags;
+						if(data["data"]["tags"].type==Json.Type.string)
+							tags~=data["data"]["tags"];
+						if(data["data"]["tags"].type==Json.Type.array){
+							foreach(Json tag;data["data"]["tags"]){
+								tags~=tag;
+							}
+						}
+						if(data["data"]["tags"].type==Json.Type.object){
+							//хуй его знает, спать хочу
+						}
+						writeln(tags);
+						if(tags.length>0)
+							m_subs~=groups[group_name].addSubscription(tags,sock,seqID);
 						break;
 					case "request":
 						
@@ -168,7 +247,34 @@ void handleConn(scope WebSocket sock)
 						break;
 
 					case "invoke":
+						Json[] tags;
+						if(data["data"]["tags"].type==Json.Type.string)
+							tags~=data["data"]["tags"];
+						if(data["data"]["tags"].type==Json.Type.array){
+							foreach(Json tag;data["data"]["tags"]){
+								tags~=tag;
+							}
+						}
+						writeln(tags);
+						auto subs=groups[group_name].findSubscriptionAll(tags);
+						if(subs.length<1)break;
+						Json busMsg=Json.emptyObject;
+						busMsg["group"] = group_name;
+						busMsg["action"] = "invoke";
+						busMsg["event"] = Json.emptyObject;
+						busMsg["event"]["tags"]=tags;
+						if(data["data"]["data"].type!=Json.Type.undefined)
+							busMsg["data"] = data["data"]["data"];
 						
+						foreach(BusGroup.Subscription sub;subs){
+							foreach(string seq,WebSocket s;sub.subscribers){
+								if(s!=sock){
+									busMsg["seqID"] = seq;
+									busMsg["event"]["matchedTags"]=sub.tags;
+									s.send(busMsg.toString());
+								}
+							}
+						}
 						break;
 					case "unsubscribe":
 						
@@ -177,57 +283,14 @@ void handleConn(scope WebSocket sock)
 						
 						break;
 					default:break;
-
 				}
 			}
 		}
-		/*
-		switch (data["data"]["action"].get!string)
-		{
-			case "join":
-			{
-				logInfo("Join to group "~group_name~"! "~sock.request.clientAddress.to!string~" "~sock.request.headers["Sec-WebSocket-Key"]);
-				break;
-			}
-			case "subscribe":
-			{
-				Json sub=Json.emptyObject;
-				sub["tags"] = data["tags"];
-				sub["seqID"] = data["seq"];
-				// can't implist asign websocket to Json field, so take it main data or try serialize to string
-				//auto webSocketData = Json.emptyObject;
-				//webSocketData["address"] = sock.request.clientAddress.to!string;
-				//webSocketData["sec_key"] = sock.request.headers["Sec-WebSocket-Key"];
-				sub["WebSocket"] = to!string(sock);  //webSocketData;
-				groups[group_name]["subscriptions"] ~= sub;
-				// send res
-				sock.send(data["seq"].get!string);
-				logInfo("Subscribe in group "~group_name~" on tags "~"<tags array>"~"!"~sock.request.clientAddress.to!string~" "~sock.request.headers["Sec-WebSocket-Key"]);
-				break;
-			}
-			case "invoke":
-			{
-				// TODO
-				auto events = null;
-				logInfo("Invoke in group "~group_name~" events "~"<events array>"~"!"~sock.request.clientAddress.to!string~" "~sock.request.headers["Sec-WebSocket-Key"]);
-				break;
-			}
-			default :
-				throw new Exception("Not implemented action type!");
-		}
-
-		//sock.send("Shut up and listen!");
-		//Json data=Json.emptyObject;
-		//data["msg"]=msg;
-		//string[] clients;
-		//foreach(WebSocket s_sock;m_socks){
-		//		if(s_sock!=sock)
-		//			s_sock.send(data.toString());
-		//}
-		*/
 	}
 	logInfo("Connection closed! "~sock.request.clientAddress.to!string~" "~sock.request.headers["Sec-WebSocket-Key"]);
-
+	for(int i=0;i<m_subs.length;i++){
+		m_subs[i].removeSubscriber(sock);
+	}
 	m_socks.removeFromArray(sock);
 	sock=null;
 }

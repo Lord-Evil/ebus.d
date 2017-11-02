@@ -115,8 +115,8 @@
 				}
 			*/
 			console.log(data);
-			if(data.group && data.group in groups){
-				let group=groups[data.group];
+			if(data.group && data.group in _groups){
+				let group=_groups[data.group];
 				if(data)
 				switch(data.action){
 					case "invoke":
@@ -142,7 +142,13 @@
 					console.log("Connection established!");
 					if(onConnect)onConnect();
 				};
-				_wsConn.onmessage=(e)=>{_inMessage(e.data);};
+				_wsConn.onmessage=(e)=>{
+					try{
+						_inMessage(JSON.parse(e.data));
+					}catch(er){
+						console.log("Server sent invalid JSON: "+e.data)
+					}
+				};
 				_wsConn.onclose=(e)=>{console.log("Connection closed!");};
 			}
 			get groups(){
