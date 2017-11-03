@@ -165,7 +165,9 @@
 				}else{
 					var group=new EGroup(gName,(data)=>{
 						var seqID=guid();
-						sendMessage({group:gName,data,seq:seqID});
+						let d = {group:gName, seq:seqID};
+						Object.assign(d, data);
+						sendMessage(d);
 						return seqID;
 					},()=>{
 						if(gName in _groups){

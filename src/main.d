@@ -289,6 +289,14 @@ void handleConn(scope WebSocket sock)
 		Json data;
 		string seqID;
 		try{
+			/* Format: 
+				{
+					"group": <string name>,
+					"action": "subscribe/invoke/etc",
+					["seq": "ad19690109566ab3",]
+					["tags": Json,]
+					["data": Json]
+			*/
 			data = parseJsonString(msg);
 			writeln(data);
 			seqID=data["seq"].get!string;
@@ -309,15 +317,15 @@ void handleConn(scope WebSocket sock)
 			}else{
 				//writeln("Existing group "~group_name);
 			}
-			if(data["data"]["action"].type!=Json.Type.undefined){
-				string action = data["data"]["action"].get!string;
+			if(data["action"].type!=Json.Type.undefined){
+				string action = data["action"].get!string;
 				switch(action){
 					case "join":
 						//no real purpose, could be used for member count or auth (via tokens etc)
 						writeln("Join group "~group_name);
 						break;
 					case "subscribe":
-						Json tags = serializeToJson(data["data"]["tags"]);
+						Json tags = serializeToJson(data["tags"]);
 						if(tags.length>0) {
 							m_subs~=groups[group_name].Subscribe(tags, sock, seqID);
 						}
@@ -331,7 +339,7 @@ void handleConn(scope WebSocket sock)
 						break;
 
 					case "invoke":
-						Json tags = serializeToJson(data["data"]["tags"]);
+						Json tags = serializeToJson(data["tags"]);
 						writeln("Invoke tags "~tags.toString());
 						auto subs=groups[group_name].findSubscriptionsForInvoke(tags);
 						if(subs.length < 1) break;
@@ -340,8 +348,8 @@ void handleConn(scope WebSocket sock)
 						busMsg["action"] = "invoke";
 						busMsg["event"] = Json.emptyObject;
 						busMsg["event"]["tags"]=tags;
-						if(data["data"]["data"].type != Json.Type.undefined)
-							busMsg["data"] = data["data"]["data"];
+						if(data["data"].type != Json.Type.undefined)
+							busMsg["data"] = data["data"];
 						foreach(BusGroup.Subscription sub; subs) {
 							foreach(string seq, WebSocket s; sub.subscribers) {
 								if(s!=sock){
