@@ -1,16 +1,24 @@
 var WebSocket=require("websocket").w3cwebsocket;
-var EBus=require("../../public/ebus");
+var EBus=require("../../libs/js/ebus");
 EBus.reWS(WebSocket);
 var wURL="ws://localhost:4445/ws"
-
-function subscription1(event,data,chat){
-	console.log("Invoked", data?"with message: "+data.message:"");
+function chatMessage(event,data,chat){
+	console.log("<<"+data.from+":", data.text);
 }
-
+let username="NodeJS WebSocket Client";
 var con=EBus.connect(wURL, ()=>{
-	var sg=con.joinGroup("test");
-	sg.subscribe("tag1",subscription1);
-	sg.invoke("tag1",{message:"NodeClient is here!"});
+	var sg=con.joinGroup("chat");
+	sg.subscribe("message",chatMessage);
+	sg.invoke("memberEnter",{name:username});
+	sg.invoke("message",{text:"Hello all, from console!", from:username});
+	process.on('SIGTERM', function () {
+		sg.invoke("memberExit",{name:username});
+		process.exit(0);
+	});
+	process.on('SIGINT', function () {
+		sg.invoke("memberExit",{name:username});
+		process.exit(0);
+	});
 	/*
 sg.invoke("tag1");
 sg.invoke(["tag1"]);

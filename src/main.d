@@ -203,9 +203,7 @@ void main(){
 	Json config=parseJsonString(cast(string)std.file.read("config.json"));
 	logInfo("Server started!");
 	auto router = new URLRouter;
-	router
-		.get("/*",serveStaticFiles("./public"))
-		.get("/ws",handleWebSockets(&handleConn));
+	router.get("/ws",handleWebSockets(&handleConn));
 
 	auto settings = new HTTPServerSettings;
 	settings.port = config["port"].get!ushort;
