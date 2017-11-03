@@ -57,6 +57,9 @@ string[] serializeTag(Json tag) {
 		case Json.Type.string:
 			res~=tag.get!string;
 			break;
+		case Json.Type.int_:
+			res~=tag.toString;
+			break;
 		case Json.Type.array:
 			foreach(Json subTag; tag) {
 				res~=serializeTag(subTag);
@@ -72,7 +75,7 @@ string[] serializeTag(Json tag) {
 			}
 			break;
 		default:
-			throw new Exception("Bad tag type");
+			throw new Exception("Bad tag type "~tag.type.to!string);
 	}
 	return res;
 }
@@ -161,38 +164,6 @@ class BusGroup
 			subs~=sub;
 		}
 		return sub;
-		/*
-		foreach(Subscription sub; subs){
-			bool fits=true;
-			if(tags.length!=sub.tags.length||tags.length==0)
-				continue;
-			foreach(Json tag;tags){
-				switch (tag.type) {
-					case Json.Type.string:
-						if(!sub.tags.hasItem(tag.get!string)){
-							fits=false;
-						}
-						break;
-					case Json.Type.array:
-						break;
-					case Json.Type.object:
-						break;
-					case Json.Type.undefined:
-					case Json.Type.null_:
-					case Json.Type.bool_:
-					case Json.Type.int_:
-					case Json.Type.bigInt:
-					case Json.Type.float_:
-					default:
-						continue;//might need to remove bad tag
-				}
-				if(!fits)break;
-			}
-			if(fits){
-
-			}
-		}
-		*/
 	}
 
 }
@@ -203,16 +174,63 @@ void main(){
 	Json config=parseJsonString(cast(string)std.file.read("config.json"));
 	logInfo("Server started!");
 	auto router = new URLRouter;
-	router.get("/ws",handleWebSockets(&handleConn));
+	router
+		.post("/push/:group/:action",&httpEventHandler)
+		.get("/ws",handleWebSockets(&handleConn));
 
 	auto settings = new HTTPServerSettings;
 	settings.port = config["port"].get!ushort;
 	settings.sessionStore = new MemorySessionStore;
 	settings.bindAddresses =  [config["bind"].get!string];
 	settings.useCompressionIfPossible=true;
+	settings.serverString="ebus.d/1.0.0";
 	//settings.errorPageHandler = toDelegate(&errorPage);
 	listenHTTP(settings, router);
 	runApplication();
+}
+void httpEventHandler(HTTPServerRequest req, HTTPServerResponse res){
+	string group_name=req.params["group"];
+	string action=req.params["action"];
+	if (group_name !in groups){
+		groups[group_name] = new BusGroup(group_name);
+		//writeln("Created new group "~group_name);
+	}else{
+		//writeln("Existing group "~group_name);
+	}
+	switch(action){
+		case "invoke":
+			Json data=req.json;
+			writeln(data);
+
+			Json busMsg=Json.emptyObject;
+			busMsg["group"] = group_name;
+			busMsg["action"] = "invoke";
+			busMsg["event"] = Json.emptyObject;
+			Json tags;
+			if(data.type==Json.Type.array||data["tags"].type == Json.Type.undefined){
+				tags=serializeToJson(data);
+				busMsg["event"]["tags"]=tags;
+			}else{
+				tags = serializeToJson(data["tags"]);
+				busMsg["event"]["tags"]=tags;
+				if(data["data"].type != Json.Type.undefined)
+					busMsg["data"] = data["data"];
+			}
+			writeln("Invoke tags "~tags.toString());
+			auto subs=groups[group_name].findSubscriptionsForInvoke(tags);
+			if(subs.length < 1) break;
+
+			foreach(BusGroup.Subscription sub; subs) {
+				foreach(string seq, WebSocket s; sub.subscribers) {
+					busMsg["seqID"] = seq;
+					busMsg["event"]["matchedTags"]="TODO";  //deSerializeTag(sub.tags);
+					s.send(busMsg.toString());
+				}
+			}
+			break;
+		default:break;
+	}
+	res.writeJsonBody(["status":"OK"]);
 }
 WebSocket[] m_socks;
 void handleConn(scope WebSocket sock)

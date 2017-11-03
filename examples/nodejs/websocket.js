@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 var WebSocket=require("websocket").w3cwebsocket;
 var EBus=require("../../libs/js/ebus");
 EBus.reWS(WebSocket);

@@ -64,6 +64,7 @@
   createInputBox(sg, username);
   sg.invoke("memberEnter",{name:username});
   sg.subscribe("message",chatMessage);
+  sg.subscribe("console",(e)=>{console.log(e.tags)});
   sg.subscribe("memberEnter",chatEvent);
   sg.subscribe("memberExit",chatEvent);
   window.onunload=()=>{
