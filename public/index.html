@@ -4,7 +4,6 @@
 <script type="text/javascript" src="ebus.js"></script>
 <script type="text/javascript">
 	//test methods
-	var sg;
 	var wURL="ws://"+window.location.host+"/ws";
 	function subscription1(event,data,chat){
 		console.log("Invoked",data?"with message: "+data.message:"");
@@ -14,6 +13,9 @@
 		var sg=con.joinGroup("test");
 		sg.subscribe("tag1",subscription1);
 		sg.invoke("tag1",{message:"WebClient is here!"});
+		window.onunload=()=>{
+			sg.invoke("tag1",{message:"WebClient has left the building!"});
+		};
 	});
 	//manual invocation
 	//con.groups.test.invoke("tag1",{message:"hi"})
