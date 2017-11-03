@@ -1,8 +1,13 @@
 *.o
-*.json
 *.7z
 tmp/*.o
 build/*
 config.json
 ebus-d
 ebus-d.exe
+*.dll
+.dub/*
+node_modules/
+package-lock.json
+dub.selections.json
+

@@ -12,4 +12,5 @@ run "dub"
 
 **After**
 copy config.json.sample to config.json
+
 Open in browser http://localhost:4445/

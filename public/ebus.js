@@ -18,12 +18,14 @@ function EGroup(name,msgInt,exitCbk){
 	var name=name;
 	var subscriptions={};
 	function findSubscription(tags,callback){
+		var subsIDs=Object.keys(subscriptions);
 		Object.keys(subscriptions, (key)=>{
 			let sub=subscriptions[key];
 			if(sub.tags==tags&&sub.callback==callback)
 				return key;
 		});
 		return null;
+
 	}
 	class EGroup
 	{
@@ -105,14 +107,13 @@ function EConnection(url,onConnect){
 				group:"sex",
 				action:"invoke",
 				event:{
-					matchedTags:"huj",
-					tags:"huj"
+					matchedTags:["tag1"],
+					tags:["tag1","tag2"]
 				}
 				data:{},
 				seqID:"96b2facc756ee65a"
 			}
 		*/
-		console.log(data);
 		if(data.group && data.group in _groups){
 			let group=_groups[data.group];
 			if(data)
@@ -197,4 +198,10 @@ class EBus{
 			return null;
 		}
 	}
+	static reWS(ws){
+		if(typeof global!="undefined")
+			global.WebSocket=ws;
+	}
 }
+if(typeof module!="undefined")
+	module.exports=EBus
