@@ -19,7 +19,6 @@ import vibe.http.websockets;
 
 /* 
 TODO
-	- move tags and invoke to first level keys of API
 	- make queue for invoke and runner for it in separate thread
 
 	- make deSerializeTag method, need for return matchedTags
