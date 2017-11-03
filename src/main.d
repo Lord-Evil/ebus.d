@@ -58,6 +58,9 @@ string[] serializeTag(Json tag) {
 			res~=tag.get!string;
 			break;
 		case Json.Type.int_:
+		case Json.Type.bool_:
+		case Json.Type.null_:
+		case Json.Type.float_:
 			res~=tag.toString;
 			break;
 		case Json.Type.array:
