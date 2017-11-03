@@ -193,10 +193,10 @@ void httpEventHandler(HTTPServerRequest req, HTTPServerResponse res){
 			busMsg["event"] = Json.emptyObject;
 			Json tags;
 			if(data.type==Json.Type.array||data["tags"].type == Json.Type.undefined){
-				tags=serializeToJson(data);
+				tags=data;
 				busMsg["event"]["tags"]=tags;
 			}else{
-				tags = serializeToJson(data["tags"]);
+				tags = data["tags"];
 				busMsg["event"]["tags"]=tags;
 				if(data["data"].type != Json.Type.undefined)
 					busMsg["data"] = data["data"];
