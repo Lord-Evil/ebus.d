@@ -18,14 +18,12 @@
 		var name=name;
 		var subscriptions={};
 		function findSubscription(tags,callback){
-			var subsIDs=Object.keys(subscriptions);
-			for(let i=0;i<subsIDs.length;i++){
-				let sub=subscriptions[subsIDs[i]];
+			Object.keys(subscriptions, (key)=>{
+				let sub=subscriptions[key];
 				if(sub.tags==tags&&sub.callback==callback)
-					return subsIDs[i];
-			}
+					return key;
+			});
 			return null;
-
 		}
 		class EGroup
 		{

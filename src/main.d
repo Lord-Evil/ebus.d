@@ -17,30 +17,28 @@ import vibe.utils.array;
 import vibe.http.fileserver;
 import vibe.http.websockets;
 
+import std.container;
+import std.container.rbtree;
 
-// TODO
-// join
-// subcribe
-// invoke
-// socks queue
+/* 
+TODO
+	- serialize Json to array of strings with !type
+	- rewrite array of Subscription to dict of strings, where attached keys goes in sorted order and last key points to Subscription object
+	- move tags and invoke to first level keys of API
+	- make queue for invoke and runner for it in separate thread
 
-/*{
-	groupA: {
-		subscriptions: [
-		  {
-		    tags,
-		    seqID,
-		    WebSocket
-		  },
-		  ...
-		],
-	},
-	groupB: ...
-}
+	- fix code style
+	- requests, chat, others
+	- http invoke POST /push/:group/:action   { "tags":[], "data":[]} return sequens
+	- webhooks
+	- timer messages; repeat timer messages
+	- make class client and pass it to group instead of websockets, it will contein websockets inside. If auth provided, then we can don't drop subcriptions on conection refuse, but instead rebind socket to new one on recovery
+	- move js part to separated project client project, also created one for python and make bots sockets and http mode to work (http for cases, when can't use sockets)
 */
 
-bool hasItem(Json[] haystack,string needle){
-	for(int i=0;i<haystack.length;i++){
+
+bool hasItem(Json[] haystack, string needle){
+	for(int i=0; i<haystack.length; i++){
 		if(haystack[i].type==Json.Type.string&&haystack[i].get!string==needle)
 			return true;
 	}
@@ -56,19 +54,19 @@ class BusGroup
 		public:
 		protected Json[] tags;
 		this(Json[] _tags){
-			tags=_tags;//Json.Array
+			tags=_tags; //Json.Array
 		}
-		void addSubscriber(WebSocket s,string seq){
+		void Subscribe(WebSocket s, string seq){
 			subscribers[seq]=s;
 		}
 		void removeSubscriber(WebSocket s){
-			string[] keysToRemove;
-			foreach(string key,WebSocket sub;subscribers){
+			string[] seqsToRemove;
+			foreach(string seq, WebSocket sub; subscribers){
 				if(sub==s)
-					keysToRemove~=key;
+					seqsToRemove~=seq;
 			}
-			foreach(string key;keysToRemove){
-				subscribers.remove(key);
+			foreach(string seq; seqsToRemove){
+				subscribers.remove(seq);
 			}
 		}
 		void removeSubscriber(string seq){
@@ -79,7 +77,7 @@ class BusGroup
 	immutable string name;
 	Subscription[] subs;//key is JSON array
 	this(string _name){
-		name=name;
+		name=_name;
 	}
 	protected WebSocket[] members;//we don't really need this.. but good to be able to count
 	Subscription[] findSubscriptionAll(Json[] tags){
@@ -107,7 +105,7 @@ class BusGroup
 			bool fits=true;
 			if(tags.length<1||tags.length!=sub.tags.length)
 				continue;
-			foreach(Json tag;tags){
+			foreach(Json tag; tags){
 				if(tag.type==Json.Type.string){
 					if(!sub.tags.hasItem(tag.get!string)){
 						fits=false;
@@ -120,13 +118,13 @@ class BusGroup
 		}
 		return null;
 	}
-	Subscription addSubscription(Json[] tags, WebSocket subscriber, string seq){
+	Subscription Subscribe(Json[] tags, WebSocket subscriber, string seq){
 		Subscription sub=findSubscription(tags);
 		if(sub !is null)
-			sub.addSubscriber(subscriber,seq);
+			sub.Subscribe(subscriber, seq);
 		else{
 			sub=new Subscription(tags);
-			sub.addSubscriber(subscriber,seq);
+			sub.Subscribe(subscriber, seq);
 			subs~=sub;
 		}
 		return sub;
@@ -237,7 +235,7 @@ void handleConn(scope WebSocket sock)
 						}
 						writeln(tags);
 						if(tags.length>0)
-							m_subs~=groups[group_name].addSubscription(tags,sock,seqID);
+							m_subs~=groups[group_name].Subscribe(tags,sock,seqID);
 						break;
 					case "request":
 						
