@@ -17,24 +17,6 @@ import vibe.utils.array;
 import vibe.http.fileserver;
 import vibe.http.websockets;
 
-/* 
-TODO
-	- make queue for invoke and runner for it in separate thread
-
-	- make deSerializeTag method, need for return matchedTags
-	- maybe use RedBlackTree instead of array for strings of tags, need perfomance test small array (length 10-100) vs same size RedBlackTree
-	- rewrite array of Subscription to dict of strings, where attached keys goes in sorted order and last key points to Subscription object
-	- fix code style
-	- requests, chat, others
-	- http invoke POST /push/:group/:action   { "tags":[], "data":[]} return sequens
-	- webhooks
-	- timer messages; repeat timer messages
-	- make class client and pass it to group instead of websockets, it will contein websockets inside. If auth provided, then we can don't drop subcriptions on conection refuse, but instead rebind socket to new one on recovery
-	- rewrite "while (sock.waitForData())" to work in threads style
-	- move js part to separated project client project, also created one for python and make bots sockets and http mode to work (http for cases, when can't use sockets)
-	- make D client
-*/
-
 
 bool hasItem(Json[] haystack, string needle){
 	for(int i=0; i<haystack.length; i++){
@@ -262,7 +244,7 @@ void handleConn(scope WebSocket sock)
 						writeln("Join group "~group_name);
 						break;
 					case "subscribe":
-						Json tags = serializeToJson(data["tags"]);
+						Json tags = data["tags"];
 						if(tags.length>0) {
 							m_subs~=groups[group_name].Subscribe(tags, sock, seqID);
 						}
@@ -276,7 +258,7 @@ void handleConn(scope WebSocket sock)
 						break;
 
 					case "invoke":
-						Json tags = serializeToJson(data["tags"]);
+						Json tags = data["tags"];
 						writeln("Invoke tags "~tags.toString());
 						auto subs=groups[group_name].findSubscriptionsForInvoke(tags);
 						if(subs.length < 1) break;
