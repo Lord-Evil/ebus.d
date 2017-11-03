@@ -14,3 +14,8 @@ ALL:clean
 	dmd tmp/*.o -of${TARGET} $(LIBS)
 clean:
 	rm tmp/*.o ${TARGET} *.o -f
+package-linux:ALL
+	mkdir ebus
+	cp ebus-d config.json lib -r ebus
+	7z a ebus-d.7z ebus
+	rm -r ebus

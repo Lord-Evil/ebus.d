@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 var WebSocket=require("websocket").w3cwebsocket;
 var EBus=require("../../libs/js/ebus");
 EBus.reWS(WebSocket);
@@ -18,6 +19,7 @@ var con=EBus.connect(wURL, ()=>{
 	sg.subscribe("message",chatMessage);
 	sg.subscribe("memberEnter",chatEvent);
   	sg.subscribe("memberExit",chatEvent);
+  	sg.subscribe("console",(e)=>{console.log(JSON.stringify(e.tags,null,3))});
 	sg.invoke("memberEnter",{name:username});
 	sg.invoke("message",{text:"Hello all, from console!", from:username});
 	process.on('SIGTERM', function () {
