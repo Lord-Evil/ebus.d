@@ -292,6 +292,7 @@ void handleConn(scope WebSocket sock)
 						writeln("Join group "~group_name);
 						break;
 					case "subscribe":
+						if(data["tags"].type==Json.Type.undefined) break;
 						Json tags = data["tags"];
 						if(tags.length>0) {
 							m_subs~=groups[group_name].Subscribe(tags, sock, seqID);
@@ -306,6 +307,7 @@ void handleConn(scope WebSocket sock)
 						break;
 
 					case "invoke":
+						if(data["tags"].type==Json.Type.undefined) break;
 						Json tags = data["tags"];
 						writeln("Invoke tags "~tags.toString());
 						auto subs=groups[group_name].findSubscriptionsForInvoke(tags);
