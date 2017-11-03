@@ -201,66 +201,6 @@ class BusGroup
 BusGroup[string] groups;
 
 void main(){
-	//Json a = Json.emptyArray;
-	//a~="1";
-	//a~="2";
-	//a~="3";
-	//Json a=Json.emptyObject;
-	//a["b"]="1";
-	//a["c"]=Json.emptyArray;
-	//a["c"]~="1";
-	//a["c"]~="2";
-	//a["c"]~="3";
-	
-	
-	//auto a2 = serializeTag(a);
-	//writeln(a);
-	//writeln(a2);
-
-	//Json[] a;
-	//j["a"]=1;
-	//j["b"]=2;
-	//Json jj=null;
-	////auto j = Json.EmptyOb
-	//a~=j;
-	//a~=jj;
-	//writeln(a);
-
-	//RedBlackTree!Json a = make!(RedBlackTree!Json)(1, 2, 3);
-	//RedBlackTree!Json b = make!(RedBlackTree!Json)(1, 2);
-
-	//auto rbt = make!(RedBlackTree!Json);
-
-
-
-	//Json a = Json.emptyObject;
-	//a["a"]=Json.emptyObject;
-	//a["a"]["1"]=2;
-
-	//Json b = Json.emptyObject;
-	//b["a"]=Json.emptyObject;
-	//b["a"]["1"]=2;
-
-	//Json c = Json.emptyObject;
-	//c["type"]="sticker";
-	//c["from"]="1234";
-	//c["to"]="43234";
-	//c["attributes"]=Json.emptyObject;
-	//c["attributes"]["key"]="value";
-
-	////rbt.insert(b);
-	////string s = deserializeJson!string(a);
-	////Json s = Json.emptyObject;
-	////string s;
-	//writeln(c.toString());
-
-	//foreach(Json i; b){
-	//	if (i in a) {
-	//		writeln(i);
-	//	}
-	//}
-
-
 	Json config=parseJsonString(cast(string)std.file.read("config.json"));
 	logInfo("Server started!");
 	auto router = new URLRouter;
