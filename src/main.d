@@ -17,24 +17,6 @@ import vibe.utils.array;
 import vibe.http.fileserver;
 import vibe.http.websockets;
 
-/* 
-TODO
-	- make queue for invoke and runner for it in separate thread
-
-	- make deSerializeTag method, need for return matchedTags
-	- maybe use RedBlackTree instead of array for strings of tags, need perfomance test small array (length 10-100) vs same size RedBlackTree
-	- rewrite array of Subscription to dict of strings, where attached keys goes in sorted order and last key points to Subscription object
-	- fix code style
-	- requests, chat, others
-	- http invoke POST /push/:group/:action   { "tags":[], "data":[]} return sequens
-	- webhooks
-	- timer messages; repeat timer messages
-	- make class client and pass it to group instead of websockets, it will contein websockets inside. If auth provided, then we can don't drop subcriptions on conection refuse, but instead rebind socket to new one on recovery
-	- rewrite "while (sock.waitForData())" to work in threads style
-	- move js part to separated project client project, also created one for python and make bots sockets and http mode to work (http for cases, when can't use sockets)
-	- make D client
-*/
-
 
 bool hasItem(Json[] haystack, string needle){
 	for(int i=0; i<haystack.length; i++){
@@ -55,17 +37,20 @@ string[] serializeTag(Json tag) {
 	string[] res;
 	switch (tag.type) {
 		case Json.Type.string:
-			res~=tag.get!string;
+			res~="!"~tag.type.to!string~"."~tag.get!string;
 			break;
 		case Json.Type.int_:
 		case Json.Type.bool_:
 		case Json.Type.null_:
 		case Json.Type.float_:
-			res~=tag.toString;
+			res~="!"~tag.type.to!string~"."~tag.toString;
 			break;
 		case Json.Type.array:
-			foreach(Json subTag; tag) {
-				res~=serializeTag(subTag);
+			for(int i;i<tag.length;i++){
+				Json subTag=tag[i];
+				foreach(string stag;serializeTag(subTag)){
+					res~="!array."~stag;
+				}
 			}
 			break;
 		case Json.Type.object:
@@ -73,7 +58,7 @@ string[] serializeTag(Json tag) {
 				auto valueSerializedArray=serializeTag(value);
 				foreach(string valueSerialized; valueSerializedArray){
 					//writeln(value.type.to!string);
-					res~=key~"!"~value.type.to!string~"."~valueSerialized;
+					res~="!object."~key~valueSerialized;
 				}
 			}
 			break;
@@ -122,8 +107,18 @@ class BusGroup
 	// partial match search: tags in sub.tags
 	Subscription[] findSubscriptionsForInvoke(Json tags){
 		Subscription[] list;
-		if(tags.length<1) return list;
+		if(tags.type==Json.Type.object||tags.type==Json.Type.array){
+			if(tags.length<1)
+				return list;
+		}else{
+			//we really want to convert single value into array item
+			Json t=Json.emptyArray;
+			t~=tags;
+			tags=t;
+		}
+
 		auto tagsSerialized = serializeTag(tags);
+		writeln(tagsSerialized);
 		foreach(Subscription sub; subs){
 			bool fits=true;
 			foreach(string tag; sub.tags){
@@ -140,7 +135,15 @@ class BusGroup
 	}
 	// full match search
 	Subscription findSubscription(Json tags) {
-		if(tags.length<1) return null;
+		if(tags.type==Json.Type.object||tags.type==Json.Type.array){
+			if(tags.length<1)
+				return null;
+		}else{
+			//we really want to convert single value into array item
+			Json t=Json.emptyArray;
+			t~=tags;
+			tags=t;
+		}
 		string[] tagsSerialized = serializeTag(tags);
 		foreach(Subscription sub; subs) {
 			if(tagsSerialized.length<1 || tagsSerialized.length!=sub.tags.length)
@@ -162,6 +165,12 @@ class BusGroup
 		if(sub !is null)
 			sub.addSubscriber(subscriber, seq);
 		else{
+			if(tags.type!=Json.Type.object||tags.type!=Json.Type.array){
+				//we really want to convert single value into array item
+				Json t=Json.emptyArray;
+				t~=tags;
+				tags=t;
+			}
 			sub=new Subscription(tags);
 			sub.addSubscriber(subscriber, seq);
 			subs~=sub;
@@ -210,14 +219,14 @@ void httpEventHandler(HTTPServerRequest req, HTTPServerResponse res){
 			busMsg["action"] = "invoke";
 			busMsg["event"] = Json.emptyObject;
 			Json tags;
-			if(data.type==Json.Type.array||data["tags"].type == Json.Type.undefined){
-				tags=serializeToJson(data);
-				busMsg["event"]["tags"]=tags;
-			}else{
-				tags = serializeToJson(data["tags"]);
+			if(data.type==Json.Type.object&&data["tags"].type != Json.Type.undefined){
+				tags = data["tags"];
 				busMsg["event"]["tags"]=tags;
 				if(data["data"].type != Json.Type.undefined)
 					busMsg["data"] = data["data"];
+			}else{
+				tags=data;
+				busMsg["event"]["tags"]=tags;
 			}
 			writeln("Invoke tags "~tags.toString());
 			auto subs=groups[group_name].findSubscriptionsForInvoke(tags);
@@ -283,7 +292,8 @@ void handleConn(scope WebSocket sock)
 						writeln("Join group "~group_name);
 						break;
 					case "subscribe":
-						Json tags = serializeToJson(data["tags"]);
+						if(data["tags"].type==Json.Type.undefined) break;
+						Json tags = data["tags"];
 						if(tags.length>0) {
 							m_subs~=groups[group_name].Subscribe(tags, sock, seqID);
 						}
@@ -297,7 +307,8 @@ void handleConn(scope WebSocket sock)
 						break;
 
 					case "invoke":
-						Json tags = serializeToJson(data["tags"]);
+						if(data["tags"].type==Json.Type.undefined) break;
+						Json tags = data["tags"];
 						writeln("Invoke tags "~tags.toString());
 						auto subs=groups[group_name].findSubscriptionsForInvoke(tags);
 						if(subs.length < 1) break;
