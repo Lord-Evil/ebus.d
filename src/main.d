@@ -7,6 +7,8 @@ import std.format;
 import std.file;
 import std.string;
 import std.algorithm;
+import std.container: DList;
+import core.thread;
 //Third-party Libs
 import vibe.data.json;
 import vibe.core.core : runApplication;
@@ -17,11 +19,6 @@ import vibe.utils.array;
 import vibe.http.fileserver;
 import vibe.http.websockets;
 
-
-import std.container: DList;
-import core.thread;
-import std.range : popFrontN, popBackN, walkLength;
-import core.sync.mutex;
 
 
 bool hasItem(Json[] haystack, string needle){
@@ -70,36 +67,36 @@ string[] serializeTag(Json tag) {
 	return res;
 }
 
-class BusGroup
+class Subscription
 {
-	class Subscription
-	{
-		private:
-		WebSocket[string] subscribers;
-		public:
-		protected string[] tags;
-		this(Json _tags) {
-			// serialization
-			tags=serializeTag(_tags);
+	private:
+	WebSocket[string] subscribers;
+	public:
+	protected string[] tags;
+	this(Json _tags) {
+		// serialization
+		tags=serializeTag(_tags);
+	}
+	void addSubscriber(WebSocket s, string seq){
+		subscribers[seq]=s;
+	}
+	void removeSubscriber(WebSocket s){
+		string[] seqsToRemove;
+		foreach(string seq, WebSocket sub; subscribers){
+			if(sub==s)
+				seqsToRemove~=seq;
 		}
-		void addSubscriber(WebSocket s, string seq){
-			subscribers[seq]=s;
-		}
-		void removeSubscriber(WebSocket s){
-			string[] seqsToRemove;
-			foreach(string seq, WebSocket sub; subscribers){
-				if(sub==s)
-					seqsToRemove~=seq;
-			}
-			foreach(string seq; seqsToRemove){
-				subscribers.remove(seq);
-			}
-		}
-		void removeSubscriber(string seq){
+		foreach(string seq; seqsToRemove){
 			subscribers.remove(seq);
 		}
 	}
+	void removeSubscriber(string seq){
+		subscribers.remove(seq);
+	}
+}
 
+class BusGroup
+{
 	immutable string name;
 	Subscription[] subs;//key is JSON array
 	this(string _name){
@@ -182,9 +179,21 @@ synchronized class SafeQueue(T) {
     // DList doesn't have this operator implemented from the box, because of
     // D philosophy is to use better than O(n) Complexity algorithms (DList count is O(n)).
     // So this part is commented for now.
-	//public uint count() {
+	//public uint length() {
 	//	return walkLength(_queue[]);
 	//}
+}
+
+// We can't use queue of sockets, when work with Websocket, because 
+// newSocket.dataAvailableForRead() is non-blocking fast function and we create new thread faster, 
+//    than work with it data, so for one new socket message we create huge amount of new threads.
+// So we need use newSocket.receiveText(), that is blocking operation, than safely work with it and its message in new thread.
+// For this purpose class SocketWithMessage is created. It should be struct or union, not class, i think, but SafeQueue return null
+// on queue.pop() of empty queue (struct/union can't be null), so we need use class instead.
+// Maybe we should rewrite SafeQueue to can use struct/union (which better?) there.
+class SocketWithMessage {
+	WebSocket socket;
+	string message;
 }
 
 /* Format of client messages data:
@@ -197,8 +206,10 @@ synchronized class SafeQueue(T) {
 	}
 */
 // Maybe need do this in other place (in some class etc)
-void socketsWorker(WebSocket sock) {
-	string msg = sock.receiveText();
+void socketsWorker(SocketWithMessage socketWithMessage) {
+	if (socketWithMessage is null) return;
+	WebSocket sock = socketWithMessage.socket;
+	string msg = socketWithMessage.message;
 	writeln(msg);
 	Json data = parseJsonString(msg);
 	string seqID=data["seq"].get!string;
@@ -246,7 +257,7 @@ void socketsWorker(WebSocket sock) {
 					busMsg["event"]["tags"]=tags;
 					if(data["data"].type != Json.Type.undefined)
 						busMsg["data"] = data["data"];
-					foreach(BusGroup.Subscription sub; subs) {
+					foreach(Subscription sub; subs) {
 						foreach(string seq, WebSocket s; sub.subscribers) {
 							if(s!=sock){
 								busMsg["seqID"] = seq;
@@ -279,12 +290,13 @@ void socketsWorker(WebSocket sock) {
 //}
 
 BusGroup[string] groups;
-shared SafeQueue!WebSocket socksQueue;
+shared SafeQueue!SocketWithMessage socksQueue;
+Subscription[] m_subs;
 WebSocket[] m_socks;
-BusGroup.Subscription[] m_subs;
 
 void main(){
-	socksQueue = new shared(SafeQueue!WebSocket);
+	socksQueue = new shared(SafeQueue!SocketWithMessage);
+	//m_subs = new shared(SafeQueue!Subscription);
 	Json config=parseJsonString(cast(string)std.file.read("config.json"));
 	logInfo("Server started!");
 	auto router = new URLRouter;
@@ -334,7 +346,7 @@ void httpInvokeHandler(HTTPServerRequest req, HTTPServerResponse res){
 				auto subs=groups[group_name].findSubscriptionsForInvoke(tags);
 				if(subs.length < 1) break;
 
-				foreach(BusGroup.Subscription sub; subs) {
+				foreach(Subscription sub; subs) {
 					foreach(string seq, WebSocket s; sub.subscribers) {
 						busMsg["seqID"] = seq;
 						busMsg["event"]["matchedTags"]="TODO";  //deSerializeTag(sub.tags);
@@ -356,8 +368,12 @@ void handleConn(scope WebSocket sock)
 		try{
 			// Looks like creating new thread is little bit slow,
 			// so maybe we can use Fiber or do it another way
+			string sockMessage = sock.receiveText();
 			new Thread({
-				socksQueue.push(sock);
+				auto sm = new SocketWithMessage;
+				sm.socket = sock;
+				sm.message = sockMessage;
+				socksQueue.push(sm);
 				socketsWorker(socksQueue.pop());
 			}).start();
 		}catch(Exception e){
@@ -371,8 +387,11 @@ void handleConn(scope WebSocket sock)
 	}
 	logInfo("Connection closed! "~sock.request.clientAddress.to!string~" "~sock.request.headers["Sec-WebSocket-Key"]);
 	for(int i=0;i<m_subs.length;i++){
+		writeln(1);
 		m_subs[i].removeSubscriber(sock);
 	}
+	writeln(2);
 	m_socks.removeFromArray(sock);
+	writeln(3);
 	sock=null;
 }
