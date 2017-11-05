@@ -18,6 +18,12 @@ import vibe.http.fileserver;
 import vibe.http.websockets;
 
 
+import std.container: DList;
+import core.thread;
+import std.range : popFrontN, popBackN, walkLength;
+import core.sync.mutex;
+
+
 bool hasItem(Json[] haystack, string needle){
 	for(int i=0; i<haystack.length; i++){
 		if(haystack[i].type==Json.Type.string&&haystack[i].get!string==needle)
@@ -37,13 +43,12 @@ string[] serializeTag(Json tag) {
 	string[] res;
 	switch (tag.type) {
 		case Json.Type.string:
-			res~=tag.get!string;
-			break;
 		case Json.Type.int_:
 		case Json.Type.bool_:
 		case Json.Type.null_:
 		case Json.Type.float_:
-			res~=tag.toString;
+			//res~=tag.toString;
+			res~=tag.to!string;//~"!"~tag.type.to!string;
 			break;
 		case Json.Type.array:
 			foreach(Json subTag; tag) {
@@ -106,6 +111,7 @@ class BusGroup
 		Subscription[] list;
 		if(tags.length<1) return list;
 		auto tagsSerialized = serializeTag(tags);
+		writeln(tagsSerialized);
 		foreach(Subscription sub; subs){
 			bool fits=true;
 			foreach(string tag; sub.tags){
@@ -153,15 +159,138 @@ class BusGroup
 
 }
 
+// Thread safe queue: double linked list (DList) of type T
+// Usage example: auto queue = new shared(SafeQueue!string);
+synchronized class SafeQueue(T) {
+    private DList!T _queue;
+    
+    public void push(T data) {
+        (cast(DList!T) _queue).insertFront(data);
+    }
+
+    public T pop() {
+    	if ((cast(DList!T) _queue).empty) return null;
+    	T res = (cast(DList!T) _queue).back();
+    	(cast(DList!T) _queue).removeBack();
+    	return res;
+    }
+
+    public bool empty() {
+    	return (cast(DList!T) _queue).empty;
+    }
+
+    // DList doesn't have this operator implemented from the box, because of
+    // D philosophy is to use better than O(n) Complexity algorithms (DList count is O(n)).
+    // So this part is commented for now.
+	//public uint count() {
+	//	return walkLength(_queue[]);
+	//}
+}
+
+/* Format of client messages data:
+	{
+		"group": <string name>,
+		"action": "subscribe/invoke/etc",
+		["seq": "ad19690109566ab3",]
+		["tags": Json,]
+		["data": Json]
+	}
+*/
+// Maybe need do this in other place (in some class etc)
+void socketsWorker(WebSocket sock) {
+	string msg = sock.receiveText();
+	writeln(msg);
+	Json data = parseJsonString(msg);
+	string seqID=data["seq"].get!string;
+	data = parseJsonString(msg);
+	writeln(data);
+	seqID=data["seq"].get!string;
+	if(data["group"].type!=Json.Type.undefined){
+		string group_name = data["group"].get!string;
+		if (group_name !in groups){
+			groups[group_name] = new BusGroup(group_name);
+			//writeln("Created new group "~group_name);
+		}else{
+			//writeln("Existing group "~group_name);
+		}
+		if(data["action"].type!=Json.Type.undefined){
+			string action = data["action"].get!string;
+			switch(action){
+				case "join":
+					//no real purpose, could be used for member count or auth (via tokens etc)
+					writeln("Join group "~group_name);
+					break;
+				case "subscribe":
+					Json tags = data["tags"];
+					if(tags.length>0) {
+						m_subs~=groups[group_name].Subscribe(tags, sock, seqID);
+					}
+					writeln("Subscripe for tags "~tags.toString());
+					break;
+				case "request":
+					
+					break;
+				case "chat":
+					
+					break;
+
+				case "invoke":
+					Json tags = data["tags"];
+					writeln("Invoke tags "~tags.toString());
+					auto subs=groups[group_name].findSubscriptionsForInvoke(tags);
+					if(subs.length < 1) break;
+					Json busMsg=Json.emptyObject;
+					busMsg["group"] = group_name;
+					busMsg["action"] = "invoke";
+					busMsg["event"] = Json.emptyObject;
+					busMsg["event"]["tags"]=tags;
+					if(data["data"].type != Json.Type.undefined)
+						busMsg["data"] = data["data"];
+					foreach(BusGroup.Subscription sub; subs) {
+						foreach(string seq, WebSocket s; sub.subscribers) {
+							if(s!=sock){
+								busMsg["seqID"] = seq;
+								busMsg["event"]["matchedTags"]="TODO";  //deSerializeTag(sub.tags);
+								s.send(busMsg.toString());
+							}
+						}
+					}
+					break;
+				case "unsubscribe":
+					
+					break;
+				case "exit":
+					
+					break;
+				default:break;
+			}
+		}
+	}
+}
+
+// TODO?: Maybe it can be done like this, but not exactly, because it do 100% CPU
+//void socketsDataLoop(int a) {
+//	writeln(a);
+//	return;
+//	while(1){
+//		if (!socksQueue.empty) socketsWorker(socksQueue.pop());
+//		Thread.sleep(1.seconds);
+//	}
+//}
+
 BusGroup[string] groups;
+shared SafeQueue!WebSocket socksQueue;
+WebSocket[] m_socks;
+BusGroup.Subscription[] m_subs;
 
 void main(){
+	socksQueue = new shared(SafeQueue!WebSocket);
 	Json config=parseJsonString(cast(string)std.file.read("config.json"));
 	logInfo("Server started!");
 	auto router = new URLRouter;
 	router
-		.post("/push/:group/:action",&httpEventHandler)
-		.get("/ws",handleWebSockets(&handleConn));
+		.post("/push/:group/:action", &httpInvokeHandler)
+		.get("/ws", handleWebSockets(&handleConn));
 
 	auto settings = new HTTPServerSettings;
 	settings.port = config["port"].get!ushort;
@@ -173,142 +302,71 @@ void main(){
 	listenHTTP(settings, router);
 	runApplication();
 }
-void httpEventHandler(HTTPServerRequest req, HTTPServerResponse res){
-	string group_name=req.params["group"];
-	string action=req.params["action"];
-	if (group_name !in groups){
-		groups[group_name] = new BusGroup(group_name);
-		//writeln("Created new group "~group_name);
-	}else{
-		//writeln("Existing group "~group_name);
-	}
-	switch(action){
-		case "invoke":
-			Json data=req.json;
-			writeln(data);
-
-			Json busMsg=Json.emptyObject;
-			busMsg["group"] = group_name;
-			busMsg["action"] = "invoke";
-			busMsg["event"] = Json.emptyObject;
-			Json tags;
-			if(data.type==Json.Type.array||data["tags"].type == Json.Type.undefined){
-				tags=data;
-				busMsg["event"]["tags"]=tags;
-			}else{
-				tags = data["tags"];
-				busMsg["event"]["tags"]=tags;
-				if(data["data"].type != Json.Type.undefined)
-					busMsg["data"] = data["data"];
-			}
-			writeln("Invoke tags "~tags.toString());
-			auto subs=groups[group_name].findSubscriptionsForInvoke(tags);
-			if(subs.length < 1) break;
-
-			foreach(BusGroup.Subscription sub; subs) {
-				foreach(string seq, WebSocket s; sub.subscribers) {
-					busMsg["seqID"] = seq;
-					busMsg["event"]["matchedTags"]="TODO";  //deSerializeTag(sub.tags);
-					s.send(busMsg.toString());
+void httpInvokeHandler(HTTPServerRequest req, HTTPServerResponse res){
+	new Thread({
+		string group_name=req.params["group"];
+		string action=req.params["action"];
+		if (group_name !in groups){
+			groups[group_name] = new BusGroup(group_name);
+			//writeln("Created new group "~group_name);
+		}else{
+			//writeln("Existing group "~group_name);
+		}
+		switch(action){
+			case "invoke":
+				Json data=req.json;
+				writeln(data);
+				Json busMsg=Json.emptyObject;
+				busMsg["group"] = group_name;
+				busMsg["action"] = "invoke";
+				busMsg["event"] = Json.emptyObject;
+				Json tags;
+				if(data.type==Json.Type.array || data["tags"].type==Json.Type.undefined){
+					tags=data;
+					busMsg["event"]["tags"]=tags;
+				}else{
+					tags = data["tags"];
+					busMsg["event"]["tags"]=tags;
+					if(data["data"].type != Json.Type.undefined)
+						busMsg["data"] = data["data"];
 				}
-			}
-			break;
-		default:break;
-	}
-	res.writeJsonBody(["status":"OK"]);
+				writeln("Invoke tags "~tags.toString());
+				auto subs=groups[group_name].findSubscriptionsForInvoke(tags);
+				if(subs.length < 1) break;
+
+				foreach(BusGroup.Subscription sub; subs) {
+					foreach(string seq, WebSocket s; sub.subscribers) {
+						busMsg["seqID"] = seq;
+						busMsg["event"]["matchedTags"]="TODO";  //deSerializeTag(sub.tags);
+						s.send(busMsg.toString());
+					}
+				}
+				break;
+			default:break;
+		}
+	}).start();
+	res.writeJsonBody(["status": "success"]);
 }
-WebSocket[] m_socks;
 void handleConn(scope WebSocket sock)
 {
 	logInfo("Incomming connection! "~sock.request.clientAddress.to!string~" "~sock.request.headers["Sec-WebSocket-Key"]);
 	//logInfo(sock.request.headers);
 	m_socks~=sock;
-	BusGroup.Subscription[] m_subs;
 	while (sock.waitForData()) {
-		string msg = sock.receiveText();
-		Json data;
-		string seqID;
 		try{
-			/* Format: 
-				{
-					"group": <string name>,
-					"action": "subscribe/invoke/etc",
-					["seq": "ad19690109566ab3",]
-					["tags": Json,]
-					["data": Json]
-			*/
-			data = parseJsonString(msg);
-			writeln(data);
-			seqID=data["seq"].get!string;
+			// Looks like creating new thread is little bit slow,
+			// so maybe we can use Fiber or do it another way
+			new Thread({
+				socksQueue.push(sock);
+				socketsWorker(socksQueue.pop());
+			}).start();
 		}catch(Exception e){
 			writeln("#####ERROR####");
+			string msg = sock.receiveText();
 			writeln(e.msg);
 			writeln(msg);
 			writeln("##############");
 			continue;
-		}
-
-		// TODO: add data in queue and do stuff in other place
-		if(data["group"].type!=Json.Type.undefined){
-			string group_name = data["group"].get!string;
-			if (group_name !in groups){
-				groups[group_name] = new BusGroup(group_name);
-				//writeln("Created new group "~group_name);
-			}else{
-				//writeln("Existing group "~group_name);
-			}
-			if(data["action"].type!=Json.Type.undefined){
-				string action = data["action"].get!string;
-				switch(action){
-					case "join":
-						//no real purpose, could be used for member count or auth (via tokens etc)
-						writeln("Join group "~group_name);
-						break;
-					case "subscribe":
-						Json tags = data["tags"];
-						if(tags.length>0) {
-							m_subs~=groups[group_name].Subscribe(tags, sock, seqID);
-						}
-						writeln("Subscripe for tags "~tags.toString());
-						break;
-					case "request":
-						
-						break;
-					case "chat":
-						
-						break;
-
-					case "invoke":
-						Json tags = data["tags"];
-						writeln("Invoke tags "~tags.toString());
-						auto subs=groups[group_name].findSubscriptionsForInvoke(tags);
-						if(subs.length < 1) break;
-						Json busMsg=Json.emptyObject;
-						busMsg["group"] = group_name;
-						busMsg["action"] = "invoke";
-						busMsg["event"] = Json.emptyObject;
-						busMsg["event"]["tags"]=tags;
-						if(data["data"].type != Json.Type.undefined)
-							busMsg["data"] = data["data"];
-						foreach(BusGroup.Subscription sub; subs) {
-							foreach(string seq, WebSocket s; sub.subscribers) {
-								if(s!=sock){
-									busMsg["seqID"] = seq;
-									busMsg["event"]["matchedTags"]="TODO";  //deSerializeTag(sub.tags);
-									s.send(busMsg.toString());
-								}
-							}
-						}
-						break;
-					case "unsubscribe":
-						
-						break;
-					case "exit":
-						
-						break;
-					default:break;
-				}
-			}
 		}
 	}
 	logInfo("Connection closed! "~sock.request.clientAddress.to!string~" "~sock.request.headers["Sec-WebSocket-Key"]);
