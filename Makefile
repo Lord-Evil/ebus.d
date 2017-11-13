@@ -22,6 +22,7 @@ profile-gc:clean version
 	dmd -c $(SOURCES) -odtmp $(D_FLAGS) -profile=gc
 	dmd tmp/*.o -of${TARGET} $(LIBS)
 profile-trace:clean version
+#http://www.digitalmars.com/ctg/trace.html
 	dmd -c $(SOURCES) -odtmp $(D_FLAGS) -profile
 	dmd tmp/*.o -of${TARGET} $(LIBS)
 clean:
