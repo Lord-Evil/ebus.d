@@ -6,6 +6,8 @@ import BusGroup;
 BusGroup[string] groups;
 
 void main(){
+	string ver = import("version.txt").strip();
+	writeln("Starting EBus build "~ver);
 	Json config=parseJsonString(cast(string)std.file.read("config.json"));
 	logInfo("Server started!");
 	auto router = new URLRouter;
