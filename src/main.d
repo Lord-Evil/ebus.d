@@ -44,12 +44,14 @@ string[] serializeTag(Json tag) {
 		case Json.Type.bool_:
 		case Json.Type.null_:
 		case Json.Type.float_:
-			//res~=tag.toString;
-			res~=tag.to!string;//~"!"~tag.type.to!string;
+			res~="!"~tag.type.to!string~"."~tag.toString;
 			break;
 		case Json.Type.array:
-			foreach(Json subTag; tag) {
-				res~=serializeTag(subTag);
+			for(int i;i<tag.length;i++){
+				Json subTag=tag[i];
+				foreach(string stag;serializeTag(subTag)){
+					res~="!array."~stag;
+				}
 			}
 			break;
 		case Json.Type.object:
@@ -57,7 +59,7 @@ string[] serializeTag(Json tag) {
 				auto valueSerializedArray=serializeTag(value);
 				foreach(string valueSerialized; valueSerializedArray){
 					//writeln(value.type.to!string);
-					res~=key~"!"~value.type.to!string~"."~valueSerialized;
+					res~="!object."~key~valueSerialized;
 				}
 			}
 			break;
@@ -106,7 +108,16 @@ class BusGroup
 	// partial match search: tags in sub.tags
 	Subscription[] findSubscriptionsForInvoke(Json tags){
 		Subscription[] list;
-		if(tags.length<1) return list;
+		if(tags.type==Json.Type.object||tags.type==Json.Type.array){
+			if(tags.length<1)
+				return list;
+		}else{
+			//we really want to convert single value into array item
+			Json t=Json.emptyArray;
+			t~=tags;
+			tags=t;
+		}
+
 		auto tagsSerialized = serializeTag(tags);
 		writeln(tagsSerialized);
 		foreach(Subscription sub; subs){
@@ -125,7 +136,15 @@ class BusGroup
 	}
 	// full match search
 	Subscription findSubscription(Json tags) {
-		if(tags.length<1) return null;
+		if(tags.type==Json.Type.object||tags.type==Json.Type.array){
+			if(tags.length<1)
+				return null;
+		}else{
+			//we really want to convert single value into array item
+			Json t=Json.emptyArray;
+			t~=tags;
+			tags=t;
+		}
 		string[] tagsSerialized = serializeTag(tags);
 		foreach(Subscription sub; subs) {
 			if(tagsSerialized.length<1 || tagsSerialized.length!=sub.tags.length)
@@ -147,6 +166,12 @@ class BusGroup
 		if(sub !is null)
 			sub.addSubscriber(subscriber, seq);
 		else{
+			if(tags.type!=Json.Type.object||tags.type!=Json.Type.array){
+				//we really want to convert single value into array item
+				Json t=Json.emptyArray;
+				t~=tags;
+				tags=t;
+			}
 			sub=new Subscription(tags);
 			sub.addSubscriber(subscriber, seq);
 			subs~=sub;
@@ -232,6 +257,7 @@ void socketsWorker(SocketWithMessage socketWithMessage) {
 					writeln("Join group "~group_name);
 					break;
 				case "subscribe":
+					if(data["tags"].type==Json.Type.undefined) break;
 					Json tags = data["tags"];
 					if(tags.length>0) {
 						m_subs~=groups[group_name].Subscribe(tags, sock, seqID);
@@ -246,6 +272,7 @@ void socketsWorker(SocketWithMessage socketWithMessage) {
 					break;
 
 				case "invoke":
+					if(data["tags"].type==Json.Type.undefined) break;
 					Json tags = data["tags"];
 					writeln("Invoke tags "~tags.toString());
 					auto subs=groups[group_name].findSubscriptionsForInvoke(tags);
@@ -301,7 +328,7 @@ void main(){
 	logInfo("Server started!");
 	auto router = new URLRouter;
 	router
-		.post("/push/:group/:action", &httpInvokeHandler)
+		.post("/push/:group/:action", &httpEventHandler)
 		.get("/ws", handleWebSockets(&handleConn));
 
 	auto settings = new HTTPServerSettings;
@@ -314,7 +341,7 @@ void main(){
 	listenHTTP(settings, router);
 	runApplication();
 }
-void httpInvokeHandler(HTTPServerRequest req, HTTPServerResponse res){
+void httpEventHandler(HTTPServerRequest req, HTTPServerResponse res){
 	new Thread({
 		string group_name=req.params["group"];
 		string action=req.params["action"];
@@ -333,14 +360,14 @@ void httpInvokeHandler(HTTPServerRequest req, HTTPServerResponse res){
 				busMsg["action"] = "invoke";
 				busMsg["event"] = Json.emptyObject;
 				Json tags;
-				if(data.type==Json.Type.array || data["tags"].type==Json.Type.undefined){
-					tags=data;
-					busMsg["event"]["tags"]=tags;
-				}else{
+				if(data.type==Json.Type.object&&data["tags"].type != Json.Type.undefined){
 					tags = data["tags"];
 					busMsg["event"]["tags"]=tags;
 					if(data["data"].type != Json.Type.undefined)
 						busMsg["data"] = data["data"];
+				}else{
+					tags=data;
+					busMsg["event"]["tags"]=tags;
 				}
 				writeln("Invoke tags "~tags.toString());
 				auto subs=groups[group_name].findSubscriptionsForInvoke(tags);
