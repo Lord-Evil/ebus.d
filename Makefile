@@ -19,7 +19,9 @@ profile-cov:clean version
 	dmd -c $(SOURCES) -odtmp $(D_FLAGS) -cov
 	dmd tmp/*.o -of${TARGET} $(LIBS)
 profile-gc:clean version
-#https://dlang.org/code_coverage.html
+	dmd -c $(SOURCES) -odtmp $(D_FLAGS) -profile=gc
+	dmd tmp/*.o -of${TARGET} $(LIBS)
+profile-trace:clean version
 	dmd -c $(SOURCES) -odtmp $(D_FLAGS) -profile
 	dmd tmp/*.o -of${TARGET} $(LIBS)
 clean:
