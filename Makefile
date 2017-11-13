@@ -25,8 +25,9 @@ profile-trace:clean version
 #http://www.digitalmars.com/ctg/trace.html
 	dmd -c $(SOURCES) -odtmp $(D_FLAGS) -profile
 	dmd tmp/*.o -of${TARGET} $(LIBS)
+	./util/d-profile-viewer
 clean:
-	rm tmp/*.o ${TARGET} *.o -f
+	rm tmp/*.o ${TARGET} *.o trace.* *.log -f
 version:
 	mkdir -p buildinfo/
 	cat .git/`cat .git/HEAD |grep -oP "refs/heads/(.+)"` >buildinfo/version.txt
