@@ -9,12 +9,18 @@ SOURCES=src/main.d src/imports.d src/BusGroup.d src/butils.d
 TARGET=ebus-d
 
 
-ALL:clean version
+ALL:release
+	./ebus-d
+release:clean version
 	dmd -c $(SOURCES) -odtmp $(D_FLAGS)
 	dmd tmp/*.o -of${TARGET} $(LIBS) $(LDFLAGS)
 profile-cov:clean version
 #https://dlang.org/code_coverage.html
 	dmd -c $(SOURCES) -odtmp $(D_FLAGS) -cov
+	dmd tmp/*.o -of${TARGET} $(LIBS)
+profile-gc:clean version
+#https://dlang.org/code_coverage.html
+	dmd -c $(SOURCES) -odtmp $(D_FLAGS) -profile=gc
 	dmd tmp/*.o -of${TARGET} $(LIBS)
 clean:
 	rm tmp/*.o ${TARGET} *.o -f
