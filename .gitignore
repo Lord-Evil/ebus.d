@@ -11,3 +11,7 @@ node_modules/
 package-lock.json
 dub.selections.json
 *.7z
+.lst
+buildinfo/
+*.log
+trace.*
