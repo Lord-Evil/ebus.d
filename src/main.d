@@ -2,6 +2,7 @@ module main;
 //our modules
 import imports;
 import BusGroup;
+import butils;
 
 BusGroup[string] groups;
 
@@ -144,11 +145,11 @@ void handleConn(scope WebSocket sock)
 						busMsg["event"]["tags"]=tags;
 						if(data["data"].type != Json.Type.undefined)
 							busMsg["data"] = data["data"];
-						foreach(BusGroup.Subscription sub; subs) {
+						foreach(Subscription sub; subs) {
 							foreach(string seq, WebSocket s; sub.subscribers) {
 								if(s!=sock){
 									busMsg["seqID"] = seq;
-									busMsg["event"]["matchedTags"]="TODO";  //deSerializeTag(sub.tags);
+									busMsg["event"]["matchedTags"]=deserializeTags(sub.tags);
 									s.send(busMsg.toString());
 								}
 							}

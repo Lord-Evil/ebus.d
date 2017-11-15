@@ -5,9 +5,9 @@ import butils;
 
 class Subscription
 {
-	public:
-		WebSocket[string] subscribers;
-	protected string[] tags;
+public:
+	WebSocket[string] subscribers;
+	string[] tags;
 	this(Json _tags) {
 		// serialization
 		tags=serializeTag(_tags);
@@ -52,13 +52,11 @@ class BusGroup
 		}
 
 		auto tagsSerialized = serializeTag(tags);
-		writeln(tagsSerialized);
 		foreach(Subscription sub; subs){
 			bool fits=true;
 			foreach(string tag; sub.tags){
 				if(!tagsSerialized.canFind(tag)){
 					fits=false;
-					//writeln(tags," do not fit with ",tag);
 					break;
 				}
 			}
@@ -99,7 +97,7 @@ class BusGroup
 		if(sub !is null)
 			sub.addSubscriber(subscriber, seq);
 		else{
-			if(tags.type!=Json.Type.object||tags.type!=Json.Type.array){
+			if(tags.type!=Json.Type.object&&tags.type!=Json.Type.array){
 				//we really want to convert single value into array item
 				Json t=Json.emptyArray;
 				t~=tags;

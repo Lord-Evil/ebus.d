@@ -40,7 +40,6 @@ string[] serializeTag(Json tag) {
 			foreach(string key, Json value; tag){
 				auto valueSerializedArray=serializeTag(value);
 				foreach(string valueSerialized; valueSerializedArray){
-					//writeln(value.type.to!string);
 					res~="!object."~key~valueSerialized;
 				}
 			}
@@ -49,4 +48,99 @@ string[] serializeTag(Json tag) {
 			throw new Exception("Bad tag type "~tag.type.to!string);
 	}
 	return res;
+}
+Json stringsToJson(string[] list){
+	Json jlist=Json.emptyArray;
+	foreach(string s; list){
+		jlist~=s;
+	}
+	return jlist;
+}
+Json deserializeTags(string[] tags){
+	//tags could result in object or array
+	if(tags.length>0){
+		if(tags[0].indexOf("!array.")==0){
+			Json result=Json.emptyArray;
+			string[] depthA;
+			string[] depthO;
+			foreach(string item; tags){
+				string[] chunks=item.split(".");
+				switch(chunks[1][1..$]){
+					case "string":
+						//в чистом виде сплит не очень, т.к. строковые выражения могут содержать точки..
+						result~=item[15..$];
+						break;
+					case "int_":
+						result~=chunks[2].to!int;
+						break;
+					case "bool_":
+						result~=chunks[2].to!bool;
+						break;
+					case "null_":
+						result~=null;
+						break;
+					case "float_":
+						//наверное с флоатом тоже, что и со строкой, т.к. точки
+						result~=item[15..$].to!float;
+						break;
+					case "array":
+						depthA~=item[7..$];
+						break;
+					case "object":
+						depthO~=item[7..$];
+						break;
+					default:break;
+				}
+			}
+			if(depthA.length>0)result~=deserializeTags(depthA);
+			if(depthO.length>0)result~=deserializeTags(depthO);
+			return result;
+		}else if(tags[0].indexOf("!object.")==0){
+			Json result=Json.emptyObject;
+			string[][string] depthA;
+			string[][string] depthO;
+			//тут чуть сложнее, т.к. нужно сладывать массивы и объекты к ключам.
+			foreach(string item; tags){
+				string[] chunks=item.split(".");
+				string key=chunks[1].split("!")[0];
+				string valType=chunks[1].split("!")[1];
+				switch(valType){
+					case "string":
+						//в чистом виде сплит не очень, т.к. строковые выражения могут содержать точки..
+						result[key]=item[16+key.length..$];
+						break;
+					case "int_":
+						result[key]=chunks[2].to!int;
+						break;
+					case "bool_":
+						result[key]=chunks[2].to!bool;
+						break;
+					case "null_":
+						result[key]=null;
+						break;
+					case "float_":
+						//наверное с флоатом тоже, что и со строкой, т.к. точки
+						result[key]=item[16+key.length..$].to!float;
+						break;
+					case "array":
+						depthA[key]~=item[(8+chunks[1].indexOf("!"))..$];
+						break;
+					case "object":
+						depthO[key]~=item[(8+chunks[1].indexOf("!"))..$];
+						break;
+					default:break;
+				}
+			}
+			if(depthA.length>0){
+				foreach(string key,val;depthA)
+					result[key]=deserializeTags(depthA[key]);
+			}
+			if(depthO.length>0){
+				foreach(string key,val;depthO)
+					result[key]=deserializeTags(depthO[key]);
+			}
+			return result;
+		}
+	}
+	return Json.emptyObject;
 }
