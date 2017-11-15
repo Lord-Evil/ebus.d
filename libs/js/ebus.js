@@ -24,7 +24,6 @@ function EGroup(name,msgInt,exitCbk){
 				return key;
 		});
 		return null;
-
 	}
 	class EGroup
 	{
