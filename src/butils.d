@@ -1,14 +1,6 @@
 module butils;//Bus Utils, yeah? Yeah?!
 import imports;
 
-bool hasItem(Json[] haystack, string needle){
-	for(int i=0; i<haystack.length; i++){
-		if(haystack[i].type==Json.Type.string&&haystack[i].get!string==needle)
-			return true;
-	}
-	return false;
-}
-
 /* Serialize tag of type Json to array of strings
    	Input tag can be
   		string -> [string]
@@ -133,11 +125,11 @@ Json deserializeTags(string[] tags){
 			}
 			if(depthA.length>0){
 				foreach(string key,val;depthA)
-					result[key]=deserializeTags(depthA[key]);
+					result[key]=deserializeTags(val);
 			}
 			if(depthO.length>0){
 				foreach(string key,val;depthO)
-					result[key]=deserializeTags(depthO[key]);
+					result[key]=deserializeTags(val);
 			}
 			return result;
 		}

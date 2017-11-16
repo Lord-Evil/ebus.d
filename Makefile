@@ -5,7 +5,7 @@ VIBED_LIBS=-L./lib/libvibe-d_utils.so \
 LIBS=$(VIBED_LIBS) -L./lib/libevent-2.1.so.5 -L./lib/libevent_pthreads-2.1.so.5 -L./lib/libphobos2.so.0.73 -L-rpath=./lib
 D_FLAGS=-fPIC -version=VibeLibeventDriver -version=Have_vibe_d_core -version=Have_libevent -version=Have_openssl -version=Have_vibe_d_data -version=Have_vibe_d_utils -I./include -de -Jbuildinfo
 LDFLAGS=-L-s -L--no-as-needed
-SOURCES=src/main.d src/imports.d src/BusGroup.d src/butils.d
+SOURCES=src/main.d src/imports.d src/Bus.d src/butils.d
 TARGET=ebus-d
 
 
@@ -25,9 +25,9 @@ profile-trace:clean version
 #http://www.digitalmars.com/ctg/trace.html
 	dmd -c $(SOURCES) -odtmp $(D_FLAGS) -profile
 	dmd tmp/*.o -of${TARGET} $(LIBS)
-	./util/d-profile-viewer
+	./ebus-d && ./util/d-profile-viewer
 clean:
-	rm tmp/*.o ${TARGET} *.o trace.* *.log -f
+	rm tmp/*.o ${TARGET} *.o trace.* *.log *.lst -f
 version:
 	mkdir -p buildinfo/
 	cat .git/`cat .git/HEAD |grep -oP "refs/heads/(.+)"` >buildinfo/version.txt
