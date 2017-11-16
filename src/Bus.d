@@ -1,9 +1,10 @@
-module BusGroup;
+module Bus;
 //our modules
 import imports;
 import butils;
 
-class Subscription
+
+class BSubscription
 {
 public:
 	WebSocket[string] subscribers;
@@ -30,17 +31,17 @@ public:
 	}
 }
 
-class BusGroup
+class BGroup
 {
 	immutable string name;
-	Subscription[] subs;//key is JSON array
+	BSubscription[] subs;//key is JSON array
 	this(string _name){
 		name=_name;
 	}
 	protected WebSocket[] members;//we don't really need this.. but good to be able to count
 	// partial match search: tags in sub.tags
-	Subscription[] findSubscriptionsForInvoke(Json tags){
-		Subscription[] list;
+	BSubscription[] findSubscriptionsForInvoke(Json tags){
+		BSubscription[] list;
 		if(tags.type==Json.Type.object||tags.type==Json.Type.array){
 			if(tags.length<1)
 				return list;
@@ -52,7 +53,7 @@ class BusGroup
 		}
 
 		auto tagsSerialized = serializeTag(tags);
-		foreach(Subscription sub; subs){
+		foreach(BSubscription sub; subs){
 			bool fits=true;
 			foreach(string tag; sub.tags){
 				if(!tagsSerialized.canFind(tag)){
@@ -66,7 +67,7 @@ class BusGroup
 		return list;
 	}
 	// full match search
-	Subscription findSubscription(Json tags) {
+	BSubscription findSubscription(Json tags) {
 		if(tags.type==Json.Type.object||tags.type==Json.Type.array){
 			if(tags.length<1)
 				return null;
@@ -77,7 +78,7 @@ class BusGroup
 			tags=t;
 		}
 		string[] tagsSerialized = serializeTag(tags);
-		foreach(Subscription sub; subs) {
+		foreach(BSubscription sub; subs) {
 			if(tagsSerialized.length<1 || tagsSerialized.length!=sub.tags.length)
 				continue;
 			bool fits = true;
@@ -92,8 +93,8 @@ class BusGroup
 		}
 		return null;
 	}
-	Subscription Subscribe(Json tags, WebSocket subscriber, string seq){
-		Subscription sub=findSubscription(tags);
+	BSubscription Subscribe(Json tags, WebSocket subscriber, string seq){
+		BSubscription sub=findSubscription(tags);
 		if(sub !is null)
 			sub.addSubscriber(subscriber, seq);
 		else{
@@ -103,7 +104,7 @@ class BusGroup
 				t~=tags;
 				tags=t;
 			}
-			sub=new Subscription(tags);
+			sub=new BSubscription(tags);
 			sub.addSubscriber(subscriber, seq);
 			subs~=sub;
 		}

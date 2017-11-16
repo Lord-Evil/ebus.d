@@ -1,16 +1,16 @@
 module main;
 //our modules
 import imports;
-import BusGroup;
+import Bus;
 import butils;
 
-BusGroup[string] groups;
+BGroup[string] groups;
 
 void main(){
 	string ver = import("version.txt").strip();
 	writeln("Starting EBus build "~ver);
 	Json config=parseJsonString(cast(string)std.file.read("config.json"));
-	logInfo("Server started!");
+	writeln("Server started!");
 	auto router = new URLRouter;
 	router
 		.post("/push/:group/:action",&httpEventHandler)
@@ -30,7 +30,7 @@ void httpEventHandler(HTTPServerRequest req, HTTPServerResponse res){
 	string group_name=req.params["group"];
 	string action=req.params["action"];
 	if (group_name !in groups){
-		groups[group_name] = new BusGroup(group_name);
+		groups[group_name] = new BGroup(group_name);
 		//writeln("Created new group "~group_name);
 	}else{
 		//writeln("Existing group "~group_name);
@@ -58,10 +58,10 @@ void httpEventHandler(HTTPServerRequest req, HTTPServerResponse res){
 			auto subs=groups[group_name].findSubscriptionsForInvoke(tags);
 			if(subs.length < 1) break;
 
-			foreach(BusGroup.Subscription sub; subs) {
+			foreach(Bus.BSubscription sub; subs) {
 				foreach(string seq, WebSocket s; sub.subscribers) {
 					busMsg["seqID"] = seq;
-					busMsg["event"]["matchedTags"]="TODO";  //deSerializeTag(sub.tags);
+					busMsg["event"]["matchedTags"]=deserializeTags(sub.tags);
 					s.send(busMsg.toString());
 				}
 			}
@@ -73,10 +73,10 @@ void httpEventHandler(HTTPServerRequest req, HTTPServerResponse res){
 WebSocket[] m_socks;
 void handleConn(scope WebSocket sock)
 {
-	logInfo("Incomming connection! "~sock.request.clientAddress.to!string~" "~sock.request.headers["Sec-WebSocket-Key"]);
-	//logInfo(sock.request.headers);
+	writeln("Incomming connection! "~sock.request.clientAddress.to!string~" "~sock.request.headers["Sec-WebSocket-Key"]);
+	//writeln(sock.request.headers);
 	m_socks~=sock;
-	BusGroup.Subscription[] m_subs;
+	Bus.BSubscription[] m_subs;
 	while (sock.waitForData()) {
 		string msg = sock.receiveText();
 		Json data;
@@ -105,7 +105,7 @@ void handleConn(scope WebSocket sock)
 		if(data["group"].type!=Json.Type.undefined){
 			string group_name = data["group"].get!string;
 			if (group_name !in groups){
-				groups[group_name] = new BusGroup(group_name);
+				groups[group_name] = new BGroup(group_name);
 				//writeln("Created new group "~group_name);
 			}else{
 				//writeln("Existing group "~group_name);
@@ -145,7 +145,7 @@ void handleConn(scope WebSocket sock)
 						busMsg["event"]["tags"]=tags;
 						if(data["data"].type != Json.Type.undefined)
 							busMsg["data"] = data["data"];
-						foreach(Subscription sub; subs) {
+						foreach(BSubscription sub; subs) {
 							foreach(string seq, WebSocket s; sub.subscribers) {
 								if(s!=sock){
 									busMsg["seqID"] = seq;
@@ -166,7 +166,7 @@ void handleConn(scope WebSocket sock)
 			}
 		}
 	}
-	logInfo("Connection closed! "~sock.request.clientAddress.to!string~" "~sock.request.headers["Sec-WebSocket-Key"]);
+	writeln("Connection closed! "~sock.request.clientAddress.to!string~" "~sock.request.headers["Sec-WebSocket-Key"]);
 	for(int i=0;i<m_subs.length;i++){
 		m_subs[i].removeSubscriber(sock);
 	}
