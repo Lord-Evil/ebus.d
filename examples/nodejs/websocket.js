@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 var WebSocket=require("websocket").w3cwebsocket;
-var EBus=require("../../libs/js/ebus");
+var EBus=require("../../clients/js/ebus");
 EBus.reWS(WebSocket);
 var wURL="ws://127.0.0.1:4445/ws"
 function chatMessage(event,data,chat){
