@@ -133,11 +133,11 @@ Json deserializeTags(string[] tags){
 			}
 			if(depthA.length>0){
 				foreach(string key,val;depthA)
-					result[key]=deserializeTags(depthA[key]);
+					result[key]=deserializeTags(val);
 			}
 			if(depthO.length>0){
 				foreach(string key,val;depthO)
-					result[key]=deserializeTags(depthO[key]);
+					result[key]=deserializeTags(val);
 			}
 			return result;
 		}
