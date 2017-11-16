@@ -136,3 +136,26 @@ Json deserializeTags(string[] tags){
 	}
 	return Json.emptyObject;
 }
+string resolveGroup(string name, string url, string authKey){
+	string group="";
+	Json resp;
+	try{
+		requestHTTP(url,
+		(scope req){
+			req.method = HTTPMethod.POST;
+			req.writeJsonBody(["group":name,"authKey":authKey]);
+		},
+		(scope res){
+			resp=res.readJson;
+			if(resp["status"].type!=Json.Type.undefined&&resp["status"].type!=Json.Type.Int&&resp["status"].get!string=="success"){
+				group=resp["group"].get!string;
+			}
+		});
+	}catch(Exception e){
+		writeln("^#######");
+		writeln(e);
+		writeln(resp);
+		writeln("$#######");
+	}
+	return group;
+}

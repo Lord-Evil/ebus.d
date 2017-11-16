@@ -27,11 +27,11 @@ profile-trace:clean version
 	dmd tmp/*.o -of${TARGET} $(LIBS)
 	./ebus-d && ./util/d-profile-viewer
 clean:
-	rm tmp/*.o ${TARGET} *.o trace.* *.log *.lst -f
+	rm tmp/*.o ${TARGET} *.o trace.* *.log *.lst -f *.7z
 version:
 	mkdir -p buildinfo/
 	cat .git/`cat .git/HEAD |grep -oP "refs/heads/(.+)"` >buildinfo/version.txt
-package-linux:ALL
+package-linux:clean release
 	mkdir ebus
 	cp ebus-d config.json lib -r ebus
 	7z a ebus-d.7z ebus

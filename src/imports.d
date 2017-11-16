@@ -14,6 +14,6 @@ public import vibe.core.core : runApplication;
 public import vibe.core.log;
 public import vibe.http.router;
 public import vibe.http.server;
+public import vibe.http.client;
 public import vibe.utils.array;
 public import vibe.http.websockets;
-
