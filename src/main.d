@@ -159,7 +159,7 @@ void handleConn(scope WebSocket sock)
 						if(config["auth"].get!bool){
 							try{
 								busMsg["group"]=reGroup[group_name];	
-							}catch(Exception e){}
+							}catch(core.exception.RangeError e){}
 						}else{
 							busMsg["group"] = group_name;
 						}
