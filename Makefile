@@ -14,6 +14,9 @@ ALL:release
 release:clean version
 	dmd -c $(SOURCES) -odtmp $(D_FLAGS)
 	dmd tmp/*.o -of${TARGET} $(LIBS) $(LDFLAGS)
+debug:
+	dmd -c $(SOURCES) -odtmp $(D_FLAGS)
+	dmd tmp/*.o -of${TARGET} $(LIBS)
 profile-cov:clean version
 #https://dlang.org/code_coverage.html
 	dmd -c $(SOURCES) -odtmp $(D_FLAGS) -cov
