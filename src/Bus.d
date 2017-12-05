@@ -33,8 +33,8 @@ public:
 
 class BGroup
 {
-	immutable string name;
-	BSubscription[] subs;//key is JSON array
+	private immutable string name;
+	private BSubscription[] subs;//key is JSON array
 	this(string _name){
 		name=_name;
 	}
