@@ -136,3 +136,37 @@ Json deserializeTags(string[] tags){
 	}
 	return Json.emptyObject;
 }
+
+void shutDown(int i){
+	writeln("\nSignal caught! "~i.to!string~"\nShutting down!");
+	exitEventLoop();
+}
+
+/*
+Message is used as a stop sign for other
+threads
+*/
+struct CancelMessage {
+}
+
+/// Acknowledge a CancelMessage
+struct CancelAckMessage {
+}
+
+class Lock {
+}
+
+// We can't use queue of sockets, when work with Websocket, because 
+// newSocket.dataAvailableForRead() is non-blocking fast function and we send msg to worker thread faster.
+// So we need use newSocket.receiveText(), that is blocking operation, than safely work with it and its message in msg worker thread.
+// For this purpose class SocketWithMessage is created. It should be struct or union, not class, i think, but there is some problems
+// with it, so its class for now.
+// Use immutable, because we don't need shared here
+class SocketWithMessage {
+	WebSocket socket;
+	string message;
+	immutable this(WebSocket s, string m) {
+		socket = cast(immutable) s;
+		message = m;
+	}
+}

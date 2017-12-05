@@ -5,44 +5,9 @@ import Bus;
 import butils;
 
 
+alias void function(int) sighandler_t;
+extern (C) sighandler_t signal(int signum, sighandler_t handler);
 
-import std.concurrency : receive, receiveOnly,
-    send, spawn, thisTid, Tid, ownerTid;
-import vibe.core.core : workerThreadCount;
-import core.sys.posix.signal;
-import core.thread;
-import vibe.core.core : disableDefaultSignalHandlers, setTimer, exitEventLoop;
-import std.variant;
-import std.container: DList;
-
-/*
-Message is used as a stop sign for other
-threads
-*/
-struct CancelMessage {
-}
-
-/// Acknowledge a CancelMessage
-struct CancelAckMessage {
-}
-
-class Lock {
-}
-
-// We can't use queue of sockets, when work with Websocket, because 
-// newSocket.dataAvailableForRead() is non-blocking fast function and we send msg to worker thread faster.
-// So we need use newSocket.receiveText(), that is blocking operation, than safely work with it and its message in msg worker thread.
-// For this purpose class SocketWithMessage is created. It should be struct or union, not class, i think, but there is some problems
-// with it, so its class for now.
-// Use immutable, because we don't need shared here
-class SocketWithMessage {
-	WebSocket socket;
-	string message;
-	immutable this(WebSocket s, string m) {
-		socket = cast(immutable) s;
-		message = m;
-	}
-}
 
 /* Format of client messages data:
 	{
@@ -55,7 +20,6 @@ class SocketWithMessage {
 */
 // Maybe need do this in other place (in some class etc)
 void socketsWorker(SocketWithMessage socketWithMessage) {
-	writeln(m_subs.length);
 	if (socketWithMessage is null) return;
 	WebSocket sock = socketWithMessage.socket;
 	string msg = socketWithMessage.message;
@@ -69,7 +33,7 @@ void socketsWorker(SocketWithMessage socketWithMessage) {
 		string group_name = data["group"].get!string;
 		synchronized (groups_lock) {
 			if (group_name !in groups){
-				groups[group_name] = new BGroup(group_name);
+				groups[group_name] = cast(shared)(new BGroup(group_name));
 				//writeln("Created new group "~group_name);
 			}else{
 				//writeln("Existing group "~group_name);
@@ -89,7 +53,7 @@ void socketsWorker(SocketWithMessage socketWithMessage) {
 						synchronized (groups_lock)
 						{
 							if(tags.length>0) {
-								m_subs~=groups[group_name].Subscribe(tags, sock, seqID);
+								m_subs~=cast(shared)((cast(BGroup)groups[group_name]).Subscribe(tags, sock, seqID));
 							}
 						}
 					}
@@ -107,7 +71,7 @@ void socketsWorker(SocketWithMessage socketWithMessage) {
 					Json tags = data["tags"];
 					writeln("Invoke tags "~tags.toString());
 					synchronized (groups_lock) {
-						auto subs=groups[group_name].findSubscriptionsForInvoke(tags);
+						auto subs=(cast(Bus.BGroup)groups[group_name]).findSubscriptionsForInvoke(tags);
 						if(subs.length < 1) break;
 						Json busMsg=Json.emptyObject;
 						busMsg["group"] = group_name;
@@ -125,8 +89,8 @@ void socketsWorker(SocketWithMessage socketWithMessage) {
 								}
 							}
 						}
-						break;
 					}
+					break;
 				case "unsubscribe":
 					
 					break;
@@ -138,7 +102,6 @@ void socketsWorker(SocketWithMessage socketWithMessage) {
 		}
 	}
 }
-
 void threadWorker(Tid parentId) {
     bool canceled = false;
     writeln("Starting ", thisTid, "...");
@@ -157,52 +120,17 @@ void threadWorker(Tid parentId) {
     };
 }
 
-// Thread safe queue: double linked list (DList) of type T
-// Usage example: auto queue = new shared(SafeQueue!string);
-synchronized class SafeQueue(T) {
-    private DList!T _queue;
-    
-    public void push(T data) {
-        (cast(DList!T) _queue).insertFront(data);
-    }
-
-    public T pop() {
-    	if ((cast(DList!T) _queue).empty) return null;
-    	T res = (cast(DList!T) _queue).back();
-    	(cast(DList!T) _queue).removeBack();
-    	return res;
-    }
-
-    public bool empty() {
-    	return (cast(DList!T) _queue).empty;
-    }
-
-    // DList doesn't have this operator implemented from the box, because of
-    // D philosophy is to use better than O(n) Complexity algorithms (DList count is O(n)).
-    // So this part is commented for now.
-	//public uint length() {
-	//	return walkLength(_queue[]);
-	//}
-}
-
-BGroup[string] groups;
-Bus.BSubscription[] m_subs;
 
 WebSocket[] m_socks;
 Tid[] threadPool;
 int currentThreadNumber = 0;
 // number of worker threads to msg passing, default = count of CPUs
 int threadCount;
+shared BGroup[string] groups;
+shared Bus.BSubscription[] m_subs;
 shared(Lock) m_subs_lock;
 shared(Lock) groups_lock;
 
-alias void function(int) sighandler_t;
-extern (C) sighandler_t signal(int signum, sighandler_t handler);
-
-void shutDown(int i){
-	writeln("\nSignal caught! "~i.to!string~"\nShutting down!");
-	exitEventLoop();
-}
 
 void main(){
 	m_subs_lock = new shared(Lock)();
@@ -248,7 +176,7 @@ void httpEventHandler(HTTPServerRequest req, HTTPServerResponse res){
 	string action=req.params["action"];
 	synchronized (groups_lock) {
 		if (group_name !in groups){
-			groups[group_name] = new BGroup(group_name);
+			groups[group_name] = cast(shared)(new BGroup(group_name));
 			//writeln("Created new group "~group_name);
 		}else{
 			//writeln("Existing group "~group_name);
@@ -275,7 +203,7 @@ void httpEventHandler(HTTPServerRequest req, HTTPServerResponse res){
 			}
 			writeln("Invoke tags "~tags.toString());
 			synchronized (groups_lock) {
-				auto subs=groups[group_name].findSubscriptionsForInvoke(tags);
+				auto subs=(cast(BGroup)groups[group_name]).findSubscriptionsForInvoke(tags);
 				if(subs.length < 1) break;
 
 				foreach(Bus.BSubscription sub; subs) {
@@ -285,8 +213,8 @@ void httpEventHandler(HTTPServerRequest req, HTTPServerResponse res){
 						s.send(busMsg.toString());
 					}
 				}
-				break;
 			}
+			break;
 		default:break;
 	}
 	res.writeJsonBody(["status":"OK"]);
@@ -314,7 +242,7 @@ void handleConn(scope WebSocket sock)
 	writeln("Connection closed! "~sock.request.clientAddress.to!string~" "~sock.request.headers["Sec-WebSocket-Key"]);
 	synchronized (m_subs_lock) {
 		for(int i=0;i<m_subs.length;i++){
-			m_subs[i].removeSubscriber(sock);
+			(cast(BSubscription)m_subs[i]).removeSubscriber(sock);
 		}
 	}
 	m_socks.removeFromArray(sock);
