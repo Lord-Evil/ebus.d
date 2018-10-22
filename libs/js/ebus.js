@@ -139,7 +139,7 @@ function EConnection(url,onConnect){
 		{
 			_wsConn.onopen=(e)=>{
 				console.log("Connection established!");
-				if(onConnect)onConnect();
+				if(onConnect)onConnect(this);
 			};
 			_wsConn.onmessage=(e)=>{
 				try{
@@ -183,6 +183,9 @@ function EConnection(url,onConnect){
 				console.log("Joined group \""+gName+"\"");
 				return group;
 			}
+		}
+		close(){
+			_wsConn.close();
 		}
 	}
 	eCon=new EConnection(onConnect);
