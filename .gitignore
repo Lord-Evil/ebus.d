@@ -3,7 +3,6 @@
 tmp/*.o
 build/*
 config.json
-ebus-d
 ebus-d.exe
 *.dll
 .dub/*
