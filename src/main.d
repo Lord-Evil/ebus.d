@@ -92,6 +92,7 @@ void handleConn(scope WebSocket sock)
 			*/
 			data = parseJsonString(msg);
 			writeln(data);
+			if(data["alive"].type!=Json.Type.undefined) continue;
 			seqID=data["seq"].get!string;
 		}catch(Exception e){
 			writeln("#####ERROR####");
