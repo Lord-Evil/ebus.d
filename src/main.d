@@ -44,9 +44,9 @@ void httpEventHandler(HTTPServerRequest req, HTTPServerResponse res){
 
 			Json busMsg=Json.emptyObject;
 			if(config["auth"].get!bool){
-				try{
-					busMsg["group"]=reGroup[group_name];	
-				}catch(core.exception.RangeError e){}
+				string* group = (group_name in reGroup);
+				if(group!=null)
+					busMsg["group"]=*group;
 			}else{
 				busMsg["group"] = group_name;
 			}
@@ -158,9 +158,9 @@ void handleConn(scope WebSocket sock)
 						if(subs.length < 1) break;
 						Json busMsg=Json.emptyObject;
 						if(config["auth"].get!bool){
-							try{
-								busMsg["group"]=reGroup[group_name];
-							}catch(core.exception.RangeError e){}
+							string* group = (group_name in reGroup);
+							if(group!=null)
+								busMsg["group"]=*group;
 						}else{
 							busMsg["group"] = group_name;
 						}
