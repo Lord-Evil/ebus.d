@@ -139,7 +139,12 @@ function EConnection(url,onConnect){
 			_wsConn.onopen=(e)=>{
 				console.log("Connection established!");
 				//This is mainly needed for the web browsers, coz they tend to close "inactive" connection
-				keepAlive = setInterval(()=>_wsConn.send('{"alive":true}'),10000);
+				keepAlive = setInterval(()=>{
+					if(_wsConn.readyState==1)
+						_wsConn.send('{"alive":true}');
+					else if(_wsConn.readyState==3)
+						clearInterval(keepAlive);
+				},10000);
 				if(onConnect)onConnect(this);
 			};
 			_wsConn.onmessage=(e)=>{
