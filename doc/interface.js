@@ -46,6 +46,7 @@ function chatHandler(event,data,chat){
 		event:
 		{
 			matchedTags -- criteria that was used to match a particular event; might be needed in case of multiple possible matches
+							//Please, NOTE: in case you have subsribed to basic type like string, e.g. "message", it will be converted into an array containing your subscription, ["message"]
 			tags -- the actial full event tags invoked
 		}
 		data -- sideload if present

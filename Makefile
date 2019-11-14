@@ -16,6 +16,9 @@ release:clean version
 	dmd tmp/*.o -of${TARGET} $(LIBS) $(LDFLAGS)
 dub-release:clean version
 	dub --override-config=vibe-d:tls/openssl-1.1 --build=release
+debug:
+	dmd -c $(SOURCES) -odtmp $(D_FLAGS)
+	dmd tmp/*.o -of${TARGET} $(LIBS)
 profile-cov:clean version
 #https://dlang.org/code_coverage.html
 	dmd -c $(SOURCES) -odtmp $(D_FLAGS) -cov
@@ -29,11 +32,11 @@ profile-trace:clean version
 	dmd tmp/*.o -of${TARGET} $(LIBS)
 	./ebus-d && ./util/d-profile-viewer
 clean:
-	rm tmp/*.o ${TARGET} *.o trace.* *.log *.lst -f
+	rm tmp/*.o ${TARGET} *.o trace.* *.log *.lst -f *.7z
 version:
 	mkdir -p buildinfo/
 	cat .git/`cat .git/HEAD |grep -oP "refs/heads/(.+)"` >buildinfo/version.txt
-package-linux:ALL
+package-linux:clean release
 	mkdir ebus
 	cp ebus-d config.json lib -r ebus
 	7z a ebus-d.7z ebus

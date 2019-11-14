@@ -215,4 +215,3 @@ class EBus{
 }
 if(typeof module!="undefined")
 	module.exports=EBus
-

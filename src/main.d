@@ -5,11 +5,12 @@ import Bus;
 import butils;
 
 BGroup[string] groups;
+Json config;
 
 void main(){
 	string ver = import("version.txt").strip();
 	writeln("Starting EBus build "~ver);
-	Json config=parseJsonString(cast(string)std.file.read("config.json"));
+	config=parseJsonString(cast(string)std.file.read("config.json"));
 	writeln("Server started!");
 	auto router = new URLRouter;
 	router
@@ -19,7 +20,7 @@ void main(){
 	auto settings = new HTTPServerSettings;
 	settings.port = config["port"].get!ushort;
 	settings.sessionStore = new MemorySessionStore;
-	settings.bindAddresses =  [config["bind"].get!string];
+	settings.bindAddresses = [config["bind"].get!string];
 	settings.useCompressionIfPossible=true;
 	settings.serverString="ebus.d/1.0.0";
 	//settings.errorPageHandler = toDelegate(&errorPage);
@@ -37,11 +38,18 @@ void httpEventHandler(HTTPServerRequest req, HTTPServerResponse res){
 	}
 	switch(action){
 		case "invoke":
+			writeln("Invoke for group "~group_name);
 			Json data=req.json;
 			writeln(data);
 
 			Json busMsg=Json.emptyObject;
-			busMsg["group"] = group_name;
+			if(config["auth"].get!bool){
+				try{
+					busMsg["group"]=reGroup[group_name];	
+				}catch(core.exception.RangeError e){}
+			}else{
+				busMsg["group"] = group_name;
+			}
 			busMsg["action"] = "invoke";
 			busMsg["event"] = Json.emptyObject;
 			Json tags;
@@ -71,6 +79,8 @@ void httpEventHandler(HTTPServerRequest req, HTTPServerResponse res){
 	res.writeJsonBody(["status":"OK"]);
 }
 WebSocket[] m_socks;
+string[string] reGroup;
+
 void handleConn(scope WebSocket sock)
 {
 	writeln("Incomming connection! "~sock.request.clientAddress.to!string~" "~sock.request.headers["Sec-WebSocket-Key"]);
@@ -105,6 +115,13 @@ void handleConn(scope WebSocket sock)
 		// TODO: add data in queue and do stuff in other place
 		if(data["group"].type!=Json.Type.undefined){
 			string group_name = data["group"].get!string;
+			if(config["auth"].get!bool){
+				string rname=resolveGroup(group_name,config["authUrl"].get!string,config["authKey"].get!string);
+				if(rname.length>1){
+					reGroup[rname]=group_name;
+					group_name=rname;
+				}
+			}
 			if (group_name !in groups){
 				groups[group_name] = new BGroup(group_name);
 				//writeln("Created new group "~group_name);
@@ -140,7 +157,13 @@ void handleConn(scope WebSocket sock)
 						auto subs=groups[group_name].findSubscriptionsForInvoke(tags);
 						if(subs.length < 1) break;
 						Json busMsg=Json.emptyObject;
-						busMsg["group"] = group_name;
+						if(config["auth"].get!bool){
+							try{
+								busMsg["group"]=reGroup[group_name];
+							}catch(core.exception.RangeError e){}
+						}else{
+							busMsg["group"] = group_name;
+						}
 						busMsg["action"] = "invoke";
 						busMsg["event"] = Json.emptyObject;
 						busMsg["event"]["tags"]=tags;
