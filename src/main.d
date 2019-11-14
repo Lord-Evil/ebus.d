@@ -4,6 +4,9 @@ import imports;
 import Bus;
 import butils;
 
+import std.container : SList;
+
+
 BGroup[string] groups;
 Json config;
 
@@ -78,14 +81,16 @@ void httpEventHandler(HTTPServerRequest req, HTTPServerResponse res){
 	}
 	res.writeJsonBody(["status":"OK"]);
 }
-WebSocket[] m_socks;
+
+auto m_socks=SList!WebSocket();
+
 string[string] reGroup;
 
 void handleConn(scope WebSocket sock)
 {
 	writeln("Incomming connection! "~sock.request.clientAddress.to!string~" "~sock.request.headers["Sec-WebSocket-Key"]);
 	//writeln(sock.request.headers);
-	m_socks~=sock;
+	m_socks.insert(sock);
 	Bus.BSubscription[] m_subs;
 	while (sock.waitForData()) {
 		string msg = sock.receiveText();
@@ -194,6 +199,6 @@ void handleConn(scope WebSocket sock)
 	for(int i=0;i<m_subs.length;i++){
 		m_subs[i].removeSubscriber(sock);
 	}
-	m_socks.removeFromArray(sock);
+	m_socks.linearRemoveElement(sock);
 	sock=null;
 }
