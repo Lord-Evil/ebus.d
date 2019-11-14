@@ -4,6 +4,7 @@ import imports;
 import Bus;
 import butils;
 
+import std.datetime.systime;
 import std.container : SList;
 
 
@@ -41,7 +42,9 @@ void httpEventHandler(HTTPServerRequest req, HTTPServerResponse res){
 	}
 	switch(action){
 		case "invoke":
+			SysTime today = Clock.currTime();
 			writeln("Invoke for group "~group_name);
+    		writeln(today);
 			Json data=req.json;
 			writeln(data);
 
