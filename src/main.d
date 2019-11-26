@@ -73,10 +73,20 @@ void httpEventHandler(HTTPServerRequest req, HTTPServerResponse res){
 			if(subs.length < 1) break;
 
 			foreach(Bus.BSubscription sub; subs) {
+				WebSocket[] badSocks;
 				foreach(string seq, WebSocket s; sub.subscribers) {
 					busMsg["seqID"] = seq;
 					busMsg["event"]["matchedTags"]=deserializeTags(sub.tags);
-					s.send(busMsg.toString());
+					try{
+						s.send(busMsg.toString());
+					}catch(Exception e){
+						writeln("!!!!!The most unexpected thing happened: "~e.msg);
+						badSocks~=s;
+					}
+				}
+
+				foreach(WebSocket s; badSocks){
+					sub.removeSubscriber(s);
 				}
 			}
 			break;
