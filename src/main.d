@@ -82,6 +82,7 @@ void httpEventHandler(HTTPServerRequest req, HTTPServerResponse res){
 					}catch(Exception e){
 						writeln("!!!!!The most unexpected thing happened: "~e.msg);
 						badSocks~=s;
+						s.close();
 					}
 				}
 
