@@ -13,9 +13,9 @@ Json config;
 
 void main(){
 	string ver = import("version.txt").strip();
-	writeln("Starting EBus build "~ver);
+	writeln("// Starting EBus build "~ver);
 	config=parseJsonString(cast(string)std.file.read("config.json"));
-	writeln("Server started!");
+	writeln("// Server started!");
 	auto router = new URLRouter;
 	router
 		.post("/push/:group/:action",&httpEventHandler)
@@ -43,8 +43,8 @@ void httpEventHandler(HTTPServerRequest req, HTTPServerResponse res){
 	switch(action){
 		case "invoke":
 			SysTime today = Clock.currTime();
-			writeln("Invoke for group "~group_name);
-    		writeln(today);
+			writeln("// Invoke for group "~group_name);
+    		writeln("// ", today);
 			Json data=req.json;
 			writeln(data);
 
@@ -68,7 +68,7 @@ void httpEventHandler(HTTPServerRequest req, HTTPServerResponse res){
 				tags=data;
 				busMsg["event"]["tags"]=tags;
 			}
-			writeln("Invoke tags "~tags.toString());
+			//writeln("Invoke tags "~tags.toString());
 			auto subs=groups[group_name].findSubscriptionsForInvoke(tags);
 			if(subs.length < 1) break;
 
@@ -80,7 +80,7 @@ void httpEventHandler(HTTPServerRequest req, HTTPServerResponse res){
 					try{
 						s.send(busMsg.toString());
 					}catch(Exception e){
-						writeln("!!!!!The most unexpected thing happened: "~e.msg);
+						writeln("// !!!!!The most unexpected thing happened: "~e.msg);
 						badSocks~=s;
 						s.close();
 					}
@@ -102,7 +102,7 @@ string[string] reGroup;
 
 void handleConn(scope WebSocket sock)
 {
-	writeln("Incomming connection! "~sock.request.clientAddress.to!string~" "~sock.request.headers["Sec-WebSocket-Key"]);
+	writeln("// Websocket: Incomming connection! "~sock.request.clientAddress.to!string~" "~sock.request.headers["Sec-WebSocket-Key"]);
 	//writeln(sock.request.headers);
 	m_socks.insert(sock);
 	Bus.BSubscription[] m_subs;
@@ -121,14 +121,15 @@ void handleConn(scope WebSocket sock)
 						["data": Json]
 				*/
 				data = parseJsonString(msg);
+				writeln("// Websocket: ");
 				writeln(data);
 				if(data["alive"].type!=Json.Type.undefined) continue;
 				seqID=data["seq"].get!string;
 			}catch(Exception e){
-				writeln("#####ERROR####");
+				writeln("// Websocket: #####ERROR####");
 				writeln(e.msg);
 				writeln(msg);
-				writeln("##############");
+				writeln("// Websocket: ##############");
 				continue;
 			}
 
@@ -153,7 +154,7 @@ void handleConn(scope WebSocket sock)
 					switch(action){
 						case "join":
 							//no real purpose, could be used for member count or auth (via tokens etc)
-							writeln("Join group "~group_name);
+							writeln("// Websocket: Join group "~group_name);
 							break;
 						case "subscribe":
 							if(data["tags"].type==Json.Type.undefined) break;
@@ -161,7 +162,7 @@ void handleConn(scope WebSocket sock)
 							if(tags.length>0) {
 								m_subs~=groups[group_name].Subscribe(tags, sock, seqID);
 							}
-							writeln("Subscripe for tags "~tags.toString());
+							writeln("// Websocket: Subscripe for tags "~tags.toString());
 							break;
 						case "request":
 							
@@ -173,7 +174,7 @@ void handleConn(scope WebSocket sock)
 						case "invoke":
 							if(data["tags"].type==Json.Type.undefined) break;
 							Json tags = data["tags"];
-							writeln("Invoke tags "~tags.toString());
+							writeln("// Websocket: Invoke tags "~tags.toString());
 							auto subs=groups[group_name].findSubscriptionsForInvoke(tags);
 							if(subs.length < 1) break;
 							Json busMsg=Json.emptyObject;
@@ -197,7 +198,7 @@ void handleConn(scope WebSocket sock)
 										try {
 											s.send(busMsg.toString());
 										} catch (Exception e){
-											writeln("Seems like websocket has died: "~s.request.clientAddress.to!string~" "~s.request.headers["Sec-WebSocket-Key"]);
+											writeln("// Websocket: Seems like websocket has died: "~s.request.clientAddress.to!string~" "~s.request.headers["Sec-WebSocket-Key"]);
 										}
 									}
 								}
@@ -215,9 +216,9 @@ void handleConn(scope WebSocket sock)
 			}
 		}
 	}catch(Exception e){
-		writeln("!!!!!The most unexpected thing happened: "~e.msg);	
+		writeln("// Websocket: !!!!!The most unexpected thing happened: "~e.msg);	
 	}
-	writeln("Connection closed! "~sock.request.clientAddress.to!string~" "~sock.request.headers["Sec-WebSocket-Key"]);
+	writeln("// Websocket: Connection closed! "~sock.request.clientAddress.to!string~" "~sock.request.headers["Sec-WebSocket-Key"]);
 	for(int i=0;i<m_subs.length;i++){
 		m_subs[i].removeSubscriber(sock);
 	}
