@@ -15,7 +15,8 @@ release:clean version
 	dmd -c $(SOURCES) -odtmp $(D_FLAGS)
 	dmd tmp/*.o -of${TARGET} $(LIBS) $(LDFLAGS)
 dub-release:clean version
-	dub --override-config=vibe-d:tls/openssl-1.1 --build=release
+	dub build --override-config=vibe-d:tls/openssl-1.1 --build=release
+	strip -s ebus-d
 debug:
 	dmd -c $(SOURCES) -odtmp $(D_FLAGS)
 	dmd tmp/*.o -of${TARGET} $(LIBS)

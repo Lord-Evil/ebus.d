@@ -44,7 +44,7 @@ void httpEventHandler(HTTPServerRequest req, HTTPServerResponse res){
 		case "invoke":
 			SysTime today = Clock.currTime();
 			writeln("// Invoke for group "~group_name);
-    		writeln("// ", today);
+			writeln("// ", today);
 			Json data=req.json;
 			writeln(data);
 
