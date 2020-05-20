@@ -1,0 +1,137 @@
+#!/bin/bash
+#Copyright Lord_Evil 2015-2016 & Vlad Bocharev 2015-2016
+cd "`dirname "$0"`"
+
+name="Evil BUS Server"
+target="./ebus-d"
+runtime_dir=./run
+function status(){
+    if [ -e "$runtime_dir/$name.pid" ]
+    then
+        pid=`cat "$runtime_dir/$name.pid"`
+	if [ `ps -e|grep -P "^[ ]*$pid " -o|sed 's/ //g'` ]
+        then
+            echo $pid
+            return 1
+        else
+            echo 2
+            rm "$runtime_dir/$name.pid"
+            return 0
+        fi
+    else
+        echo 0
+        return 0
+    fi
+}
+function stop(){
+            echo "Stopping $name" $res
+            kill $res
+	    while [ $(status) -gt 2 ]
+            do
+                sleep 1s
+                echo "dying"
+            done
+}
+function startd(){
+             echo "Starting $name daemon" 
+             mkdir -p "$runtime_dir/logs"
+             $target > "$runtime_dir/logs/`date +%Y-%m-%d_%H-%M.log`" 2> "$runtime_dir/logs/`date +%Y-%m-%d_%H-%M_error.log`" &
+             echo $! > "$runtime_dir/$name.pid"
+}
+
+res=$(status)
+case $1 in
+    start )
+        if [ $res -gt 2 ]
+        then
+            echo "already running"
+            exit
+        else
+             echo "Starting $name...."
+            $target
+        fi
+        ;;
+    start-d )
+        if [ $res -gt 2 ]
+        then
+            echo "already running"
+            exit
+        else
+             startd
+             exit
+        fi
+        ;;
+    status )
+        if [ $res -gt 2 ]
+        then
+            echo -e "$name is running\n PID: $res"
+            exit
+        fi
+        if [ $res == 2 ]
+        then
+            echo "$name is dead =("
+            exit
+        else
+            echo "$name has not been started"
+            exit
+        fi
+        ;;
+    stop )
+        if [ $res -gt 2 ]
+        then
+            stop
+            exit
+        fi
+        if [ $res == 2 ]
+        then
+            echo "$name is dead =("
+            exit
+        else
+            echo "$name has not been started"
+            exit
+        fi
+        ;;
+    restart )
+        echo "Restarting"
+        if [ $res -gt 2 ]
+        then
+            stop
+            startd
+            exit
+        fi
+        if [ $res == 2 ]
+        then
+            echo "$name is dead =("
+            startd
+            exit
+        else
+            echo "$name has not been started"
+            startd
+            exit
+        fi
+        ;;
+    update )
+        echo "Updating source code"
+        git pull
+        if [ $res -gt 2 ]
+        then
+            stop
+            startd
+            exit
+        fi
+        if [ $res == 2 ]
+        then
+            echo "$name is dead =("
+            startd
+            exit
+        else
+            echo "$name has not been started"
+            startd
+            exit
+        fi
+        ;;
+    * )
+        echo "And what is it you want today, kind sir?"
+        exit
+        ;;
+esac
