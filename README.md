@@ -2,7 +2,8 @@
 
 Build instructions
 
-**On 64 bit Linux:**
+**On 64 bit Linux:**  
+cp config.json.sample config.json  
 install dmd
 run "Make"
 
