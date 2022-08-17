@@ -28,7 +28,9 @@ void main(){
 	settings.useCompressionIfPossible=true;
 	settings.serverString="ebus.d/1.0.0";
 	//settings.errorPageHandler = toDelegate(&errorPage);
-	listenHTTP(settings, router);
+	auto listener = listenHTTP(settings, router);
+	scope(exit)
+        listener.stopListening();
 	runApplication();
 }
 void httpEventHandler(HTTPServerRequest req, HTTPServerResponse res){
