@@ -136,14 +136,12 @@ function EConnection(url,onConnect){
 	class EConnection{
 		constructor(onConnect)
 		{
+			let keepAlive;
 			_wsConn.onopen=(e)=>{
 				console.log("Connection established!");
 				//This is mainly needed for the web browsers, coz they tend to close "inactive" connection
 				keepAlive = setInterval(()=>{
-					if(_wsConn.readyState==1)
-						_wsConn.send('{"alive":true}');
-					else if(_wsConn.readyState==3)
-						clearInterval(keepAlive);
+					_wsConn.send('{"alive":true}');
 				},10000);
 				if(onConnect)onConnect(this);
 			};
@@ -154,7 +152,10 @@ function EConnection(url,onConnect){
 					console.log("Server sent invalid JSON: "+e.data)
 				}
 			};
-			_wsConn.onclose=(e)=>{console.log("Connection closed!");};
+			_wsConn.onclose=(e)=>{
+				console.log("Connection closed!");
+				clearInterval(keepAlive);
+			};
 		}
 		get groups(){
 			let groupList={};
@@ -191,7 +192,6 @@ function EConnection(url,onConnect){
 			}
 		}
 		close(){
-			clearInterval(keepAlive);
 			_wsConn.close();
 		}
 	}
@@ -215,3 +215,4 @@ class EBus{
 }
 if(typeof module!="undefined")
 	module.exports=EBus
+
