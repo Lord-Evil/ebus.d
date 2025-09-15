@@ -71,16 +71,19 @@ void httpEventHandler(HTTPServerRequest req, HTTPServerResponse res){
 				busMsg["event"]["tags"]=tags;
 			}
 			//writeln("Invoke tags "~tags.toString());
-			auto subs=groups[group_name].findSubscriptionsForInvoke(tags);
-			if(subs.length < 1) break;
+			auto subscriptions = groups[group_name].findSubscriptionsForInvoke(tags);
+			if(subscriptions.length < 1) break;
 
-			foreach(Bus.BSubscription sub; subs) {
+			int counter = 0;
+
+			foreach(Bus.BSubscription subscription; subscriptions) {
 				WebSocket[] badSocks;
-				foreach(string seq, WebSocket s; sub.subscribers) {
+				foreach(string seq, WebSocket s; subscription.subscribers) {
 					busMsg["seqID"] = seq;
-					busMsg["event"]["matchedTags"]=deserializeTags(sub.tags);
+					busMsg["event"]["matchedTags"]=deserializeTags(subscription.tags);
 					try{
 						s.send(busMsg.toString());
+						counter++;
 					}catch(Exception e){
 						writeln("// !!!!!The most unexpected thing happened: "~e.msg);
 						badSocks~=s;
@@ -89,10 +92,11 @@ void httpEventHandler(HTTPServerRequest req, HTTPServerResponse res){
 				}
 
 				foreach(WebSocket s; badSocks){
-					sub.removeSubscriber(s);
+					subscription.removeSubscriber(s);
 				}
 			}
-			break;
+			res.writeJsonBody(Json(["status": Json("OK"), "subscribers": Json(counter)]));
+			return;
 		default:break;
 	}
 	res.writeJsonBody(["status":"OK"]);

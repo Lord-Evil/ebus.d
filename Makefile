@@ -15,7 +15,7 @@ release:clean version
 	dmd -c $(SOURCES) -odtmp $(D_FLAGS)
 	dmd tmp/*.o -of${TARGET} $(LIBS) $(LDFLAGS)
 dub-release:clean version
-	dub build --override-config=vibe-d:tls/openssl-1.1 --build=release
+	dub build --build=release
 	strip -s ebus-d
 debug:
 	dmd -c $(SOURCES) -odtmp $(D_FLAGS)
@@ -37,8 +37,8 @@ clean:
 version:
 	mkdir -p buildinfo/
 	cat .git/`cat .git/HEAD |grep -oP "refs/heads/(.+)"` >buildinfo/version.txt
-package-linux:clean release
-	mkdir ebus
-	cp ebus-d config.json lib -r ebus
+package-linux:clean dub-release
+	mkdir -p ebus
+	cp ebus-d config.json -r ebus
 	7z a ebus-d.7z ebus
 	rm -r ebus
