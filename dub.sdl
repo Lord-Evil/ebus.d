@@ -5,3 +5,6 @@ copyright "Copyright © 2017, Open Minded Webmasters"
 authors "Lord_Evil, Vlad Bocharov"
 dependency "vibe-d:http" version="0.10.2"
 stringImportPaths "buildinfo"
+buildSettings {
+	dflags "-d"
+}

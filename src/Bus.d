@@ -38,7 +38,20 @@ class BGroup
 	this(string _name){
 		name=_name;
 	}
-	protected WebSocket[] members;//we don't really need this.. but good to be able to count
+	protected WebSocket[string] members;
+	ulong totalSubscribers(){
+		return members.length;
+	}
+	void removeSubscriber(WebSocket s){
+		string[] seqsToRemove;
+		foreach(string seq, WebSocket sub; members){
+			if(sub==s)
+				seqsToRemove~=seq;
+		}
+		foreach(string seq; seqsToRemove){
+			members.remove(seq);
+		}
+	}
 	// partial match search: tags in sub.tags
 	BSubscription[] findSubscriptionsForInvoke(Json tags){
 		BSubscription[] list;
@@ -108,6 +121,7 @@ class BGroup
 			sub.addSubscriber(subscriber, seq);
 			subs~=sub;
 		}
+		members[seq] = subscriber;
 		return sub;
 	}
 

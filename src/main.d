@@ -74,7 +74,6 @@ void httpEventHandler(HTTPServerRequest req, HTTPServerResponse res){
 			auto subscriptions = groups[group_name].findSubscriptionsForInvoke(tags);
 			if(subscriptions.length < 1) break;
 
-			int counter = 0;
 
 			foreach(Bus.BSubscription subscription; subscriptions) {
 				WebSocket[] badSocks;
@@ -83,7 +82,6 @@ void httpEventHandler(HTTPServerRequest req, HTTPServerResponse res){
 					busMsg["event"]["matchedTags"]=deserializeTags(subscription.tags);
 					try{
 						s.send(busMsg.toString());
-						counter++;
 					}catch(Exception e){
 						writeln("// !!!!!The most unexpected thing happened: "~e.msg);
 						badSocks~=s;
@@ -93,8 +91,11 @@ void httpEventHandler(HTTPServerRequest req, HTTPServerResponse res){
 
 				foreach(WebSocket s; badSocks){
 					subscription.removeSubscriber(s);
+					groups[group_name].removeSubscriber(s);
 				}
 			}
+			ulong counter = 0;
+			counter=groups[group_name].totalSubscribers;
 			res.writeJsonBody(Json(["status": Json("OK"), "subscribers": Json(counter)]));
 			return;
 		default:break;
