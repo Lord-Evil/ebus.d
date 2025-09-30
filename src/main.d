@@ -6,15 +6,28 @@ import butils;
 
 import std.datetime.systime;
 import std.container : SList;
+import std.algorithm : canFind;
+import core.sync.mutex : Mutex;
 
 
 BGroup[string] groups;
 Json config;
+Mutex groupsMutex;
 
 void main(){
 	string ver = import("version.txt").strip();
 	writeln("// Starting EBus build "~ver);
 	config=parseJsonString(cast(string)std.file.read("config.json"));
+	
+	// Validate required config fields
+	if(config["port"].type == Json.Type.undefined)
+		throw new Exception("Missing 'port' in config.json");
+	if(config["bind"].type == Json.Type.undefined)
+		throw new Exception("Missing 'bind' in config.json");
+	if(config["auth"].type == Json.Type.undefined)
+		throw new Exception("Missing 'auth' in config.json");
+	
+	groupsMutex = new Mutex();
 	writeln("// Server started!");
 	auto router = new URLRouter;
 	router
@@ -29,19 +42,33 @@ void main(){
 	settings.serverString="ebus.d/1.0.0";
 	//settings.errorPageHandler = toDelegate(&errorPage);
 	auto listener = listenHTTP(settings, router);
-	scope(exit)
-        listener.stopListening();
+	scope(exit) {
+		writeln("// Shutting down gracefully...");
+		listener.stopListening();
+		// Close all WebSocket connections
+		synchronized(groupsMutex) {
+			foreach(group_name, group; groups) {
+				writeln("// Closing connections in group: "~group_name);
+			}
+			groups.clear();
+		}
+		writeln("// Shutdown complete!");
+	}
 	runApplication();
 }
 void httpEventHandler(HTTPServerRequest req, HTTPServerResponse res){
 	string group_name=req.params["group"];
 	string action=req.params["action"];
-	if (group_name !in groups){
-		groups[group_name] = new BGroup(group_name);
-		//writeln("Created new group "~group_name);
-	}else{
-		//writeln("Existing group "~group_name);
+	
+	synchronized(groupsMutex) {
+		if (group_name !in groups){
+			groups[group_name] = new BGroup(group_name);
+			//writeln("Created new group "~group_name);
+		}else{
+			//writeln("Existing group "~group_name);
+		}
 	}
+	
 	switch(action){
 		case "invoke":
 			SysTime today = Clock.currTime();
@@ -70,10 +97,13 @@ void httpEventHandler(HTTPServerRequest req, HTTPServerResponse res){
 				tags=data;
 				busMsg["event"]["tags"]=tags;
 			}
-			//writeln("Invoke tags "~tags.toString());
-			auto subscriptions = groups[group_name].findSubscriptionsForInvoke(tags);
+			
+			Bus.BSubscription[] subscriptions;
+			synchronized(groupsMutex) {
+				//writeln("Invoke tags "~tags.toString());
+				subscriptions = groups[group_name].findSubscriptionsForInvoke(tags);
+			}
 			if(subscriptions.length < 1) break;
-
 
 			foreach(Bus.BSubscription subscription; subscriptions) {
 				WebSocket[] badSocks;
@@ -89,13 +119,22 @@ void httpEventHandler(HTTPServerRequest req, HTTPServerResponse res){
 					}
 				}
 
-				foreach(WebSocket s; badSocks){
-					subscription.removeSubscriber(s);
-					groups[group_name].removeSubscriber(s);
+				synchronized(groupsMutex) {
+					foreach(WebSocket s; badSocks){
+						subscription.removeSubscriber(s);
+						if(group_name in groups) {
+							groups[group_name].removeSubscriber(s);
+						}
+					}
 				}
 			}
+			
 			ulong counter = 0;
-			counter=groups[group_name].totalSubscribers;
+			synchronized(groupsMutex) {
+				if(group_name in groups) {
+					counter=groups[group_name].totalSubscribers;
+				}
+			}
 			res.writeJsonBody(Json(["status": Json("OK"), "subscribers": Json(counter)]));
 			return;
 		default:break;
@@ -103,16 +142,17 @@ void httpEventHandler(HTTPServerRequest req, HTTPServerResponse res){
 	res.writeJsonBody(["status":"OK"]);
 }
 
-auto m_socks=SList!WebSocket();
+//auto m_socks=SList!WebSocket(); // Unused - commented out
 
 string[string] reGroup;
 
 void handleConn(scope WebSocket sock)
 {
-	writeln("// Websocket: Incomming connection! "~sock.request.clientAddress.to!string~" "~sock.request.headers["Sec-WebSocket-Key"]);
+	writeln("// Websocket: Incoming connection! "~sock.request.clientAddress.to!string~" "~sock.request.headers["Sec-WebSocket-Key"]);
 	//writeln(sock.request.headers);
-	m_socks.insert(sock);
+	//m_socks.insert(sock); // Commented out - unused
 	Bus.BSubscription[] m_subs;
+	string[] m_groups; // Track groups this connection subscribed to
 	try{
 		while (sock.waitForData()) {
 			string msg = sock.receiveText();
@@ -150,12 +190,16 @@ void handleConn(scope WebSocket sock)
 						group_name=rname;
 					}
 				}
-				if (group_name !in groups){
-					groups[group_name] = new BGroup(group_name);
-					//writeln("Created new group "~group_name);
-				}else{
-					//writeln("Existing group "~group_name);
+				
+				synchronized(groupsMutex) {
+					if (group_name !in groups){
+						groups[group_name] = new BGroup(group_name);
+						//writeln("Created new group "~group_name);
+					}else{
+						//writeln("Existing group "~group_name);
+					}
 				}
+				
 				if(data["action"].type!=Json.Type.undefined){
 					string action = data["action"].get!string;
 					switch(action){
@@ -167,23 +211,33 @@ void handleConn(scope WebSocket sock)
 							if(data["tags"].type==Json.Type.undefined) break;
 							Json tags = data["tags"];
 							if(tags.length>0) {
-								m_subs~=groups[group_name].Subscribe(tags, sock, seqID);
+								synchronized(groupsMutex) {
+									m_subs~=groups[group_name].Subscribe(tags, sock, seqID);
+								}
+								// Track this group for cleanup on disconnect
+								if(!m_groups.canFind(group_name))
+									m_groups~=group_name;
 							}
-							writeln("// Websocket: Subscripe for tags "~tags.toString());
+							writeln("// Websocket: Subscribe for tags "~tags.toString());
 							break;
 						case "request":
-							
+							//TODO - to implement
 							break;
 						case "chat":
-							
+							//TODO - to implement
 							break;
 
 						case "invoke":
 							if(data["tags"].type==Json.Type.undefined) break;
 							Json tags = data["tags"];
 							writeln("// Websocket: Invoke tags "~tags.toString());
-							auto subs=groups[group_name].findSubscriptionsForInvoke(tags);
+							
+							BSubscription[] subs;
+							synchronized(groupsMutex) {
+								subs=groups[group_name].findSubscriptionsForInvoke(tags);
+							}
 							if(subs.length < 1) break;
+							
 							Json busMsg=Json.emptyObject;
 							if(config["auth"].get!bool){
 								string* group = (group_name in reGroup);
@@ -197,7 +251,9 @@ void handleConn(scope WebSocket sock)
 							busMsg["event"]["tags"]=tags;
 							if(data["data"].type != Json.Type.undefined)
 								busMsg["data"] = data["data"];
+								
 							foreach(BSubscription sub; subs) {
+								WebSocket[] badSocks;
 								foreach(string seq, WebSocket s; sub.subscribers) {
 									if(s!=sock){
 										busMsg["seqID"] = seq;
@@ -206,16 +262,27 @@ void handleConn(scope WebSocket sock)
 											s.send(busMsg.toString());
 										} catch (Exception e){
 											writeln("// Websocket: Seems like websocket has died: "~s.request.clientAddress.to!string~" "~s.request.headers["Sec-WebSocket-Key"]);
+											badSocks~=s;
+											s.close();
+										}
+									}
+								}
+								// Clean up dead sockets
+								synchronized(groupsMutex) {
+									foreach(WebSocket s; badSocks){
+										sub.removeSubscriber(s);
+										if(group_name in groups) {
+											groups[group_name].removeSubscriber(s);
 										}
 									}
 								}
 							}
 							break;
 						case "unsubscribe":
-							
+							//TODO - to implement
 							break;
 						case "exit":
-							
+							//TODO - to implement
 							break;
 						default:break;
 					}
@@ -226,9 +293,32 @@ void handleConn(scope WebSocket sock)
 		writeln("// Websocket: !!!!!The most unexpected thing happened: "~e.msg);	
 	}
 	writeln("// Websocket: Connection closed! "~sock.request.clientAddress.to!string~" "~sock.request.headers["Sec-WebSocket-Key"]);
-	for(int i=0;i<m_subs.length;i++){
-		m_subs[i].removeSubscriber(sock);
+	
+	// Remove subscriber from all subscriptions
+	foreach(sub; m_subs){
+		sub.removeSubscriber(sock);
 	}
-	m_socks.linearRemoveElement(sock);
+	
+	// Remove subscriber from all groups it was part of
+	synchronized(groupsMutex) {
+		foreach(string group_name; m_groups){
+			if(group_name in groups){
+				groups[group_name].removeSubscriber(sock);
+				
+				// Clean up empty groups (memory leak fix)
+				if(groups[group_name].isEmpty()){
+					groups.remove(group_name);
+					writeln("// Cleaned up empty group: "~group_name);
+					
+					// Clean up reGroup mapping (memory leak fix)
+					if(group_name in reGroup){
+						reGroup.remove(group_name);
+					}
+				}
+			}
+		}
+	}
+	
+	//m_socks.linearRemoveElement(sock); // Commented out - m_socks is unused
 	sock=null;
 }

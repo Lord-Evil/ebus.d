@@ -42,6 +42,9 @@ class BGroup
 	ulong totalSubscribers(){
 		return members.length;
 	}
+	bool isEmpty(){
+		return members.length == 0;
+	}
 	void removeSubscriber(WebSocket s){
 		string[] seqsToRemove;
 		foreach(string seq, WebSocket sub; members){

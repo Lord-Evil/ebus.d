@@ -9,7 +9,7 @@ SOURCES=src/main.d src/imports.d src/Bus.d src/butils.d
 TARGET=ebus-d
 
 
-ALL:release
+ALL:dub-release
 	./ebus-d
 release:clean version
 	dmd -c $(SOURCES) -odtmp $(D_FLAGS)
