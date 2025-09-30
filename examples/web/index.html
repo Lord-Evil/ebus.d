@@ -50,7 +50,7 @@
   	msgItem.innerHTML="{direction} <b>{from}</b>: {text}".format({from:from,text:text,direction:direction});
   	msgBox.appendChild(msgItem);
   }
-  var username=prompt('Введите имя пользователя', "");
+  var username=prompt('Enter your nickname', "");
   var wURL="ws://localhost:4445/ws";
   function chatMessage(event,data,chat){
     displayMessage(data.from, data.text,"<<");
