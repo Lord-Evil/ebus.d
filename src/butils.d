@@ -1,4 +1,4 @@
-module butils;//Bus Utils, yeah? Yeah?!
+module butils; //Bus Utils, yeah? Yeah?!
 import imports;
 
 /* Serialize tag of type Json to array of strings
@@ -8,150 +8,182 @@ import imports;
 		dict -> [key!type.value, ...]
  	Result is array of strings
 */
-string[] serializeTag(Json tag) {
+string[] serializeTag(Json tag)
+{
 	string[] res;
-	switch (tag.type) {
-		case Json.Type.string:
-			res~="!"~tag.type.to!string~"."~tag.get!string;
-			break;
-		case Json.Type.int_:
-		case Json.Type.bool_:
-		case Json.Type.null_:
-		case Json.Type.float_:
-			res~="!"~tag.type.to!string~"."~tag.toString;
-			break;
-		case Json.Type.array:
-			for(int i;i<tag.length;i++){
-				Json subTag=tag[i];
-				foreach(string stag;serializeTag(subTag)){
-					res~="!array."~stag;
-				}
+	switch (tag.type)
+	{
+	case Json.Type.string:
+		res ~= "!" ~ tag.type.to!string ~ "." ~ tag.get!string;
+		break;
+	case Json.Type.int_:
+	case Json.Type.bool_:
+	case Json.Type.null_:
+	case Json.Type.float_:
+		res ~= "!" ~ tag.type.to!string ~ "." ~ tag.toString;
+		break;
+	case Json.Type.array:
+		for (int i; i < tag.length; i++)
+		{
+			Json subTag = tag[i];
+			foreach (string stag; serializeTag(subTag))
+			{
+				res ~= "!array." ~ stag;
 			}
-			break;
-		case Json.Type.object:
-			foreach(string key, Json value; tag){
-				auto valueSerializedArray=serializeTag(value);
-				foreach(string valueSerialized; valueSerializedArray){
-					res~="!object."~key~valueSerialized;
-				}
+		}
+		break;
+	case Json.Type.object:
+		foreach (string key, Json value; tag)
+		{
+			auto valueSerializedArray = serializeTag(value);
+			foreach (string valueSerialized; valueSerializedArray)
+			{
+				res ~= "!object." ~ key ~ valueSerialized;
 			}
-			break;
-		default:
-			throw new Exception("Bad tag type "~tag.type.to!string);
+		}
+		break;
+	default:
+		throw new Exception("Bad tag type " ~ tag.type.to!string);
 	}
 	return res;
 }
-Json stringsToJson(string[] list){
-	Json jlist=Json.emptyArray;
-	foreach(string s; list){
-		jlist~=s;
+
+Json stringsToJson(string[] list)
+{
+	Json jlist = Json.emptyArray;
+	foreach (string s; list)
+	{
+		jlist ~= s;
 	}
 	return jlist;
 }
-Json deserializeTags(string[] tags){
+
+Json deserializeTags(string[] tags)
+{
 	//tags could result in object or array
-	if(tags.length>0){
-		if(tags[0].indexOf("!array.")==0){
-			Json result=Json.emptyArray;
+	if (tags.length > 0)
+	{
+		if (tags[0].indexOf("!array.") == 0)
+		{
+			Json result = Json.emptyArray;
 			string[] depthA;
 			string[] depthO;
-			foreach(string item; tags){
-				string[] chunks=item.split(".");
-				switch(chunks[1][1..$]){
-					case "string":
-						//в чистом виде сплит не очень, т.к. строковые выражения могут содержать точки..
-						result~=item[15..$];
-						break;
-					case "int_":
-						result~=chunks[2].to!int;
-						break;
-					case "bool_":
-						result~=chunks[2].to!bool;
-						break;
-					case "null_":
-						result~=null;
-						break;
-					case "float_":
-						//наверное с флоатом тоже, что и со строкой, т.к. точки
-						result~=item[15..$].to!float;
-						break;
-					case "array":
-						depthA~=item[7..$];
-						break;
-					case "object":
-						depthO~=item[7..$];
-						break;
-					default:break;
+			foreach (string item; tags)
+			{
+				string[] chunks = item.split(".");
+				switch (chunks[1][1 .. $])
+				{
+				case "string":
+					//в чистом виде сплит не очень, т.к. строковые выражения могут содержать точки..
+					result ~= item[15 .. $];
+					break;
+				case "int_":
+					result ~= chunks[2].to!int;
+					break;
+				case "bool_":
+					result ~= chunks[2].to!bool;
+					break;
+				case "null_":
+					result ~= null;
+					break;
+				case "float_":
+					//наверное с флоатом тоже, что и со строкой, т.к. точки
+					result ~= item[15 .. $].to!float;
+					break;
+				case "array":
+					depthA ~= item[7 .. $];
+					break;
+				case "object":
+					depthO ~= item[7 .. $];
+					break;
+				default:
+					break;
 				}
 			}
-			if(depthA.length>0)result~=deserializeTags(depthA);
-			if(depthO.length>0)result~=deserializeTags(depthO);
+			if (depthA.length > 0)
+				result ~= deserializeTags(depthA);
+			if (depthO.length > 0)
+				result ~= deserializeTags(depthO);
 			return result;
-		}else if(tags[0].indexOf("!object.")==0){
-			Json result=Json.emptyObject;
+		}
+		else if (tags[0].indexOf("!object.") == 0)
+		{
+			Json result = Json.emptyObject;
 			string[][string] depthA;
 			string[][string] depthO;
 			//тут чуть сложнее, т.к. нужно сладывать массивы и объекты к ключам.
-			foreach(string item; tags){
-				string[] chunks=item.split(".");
-				string key=chunks[1].split("!")[0];
-				string valType=chunks[1].split("!")[1];
-				switch(valType){
-					case "string":
-						//в чистом виде сплит не очень, т.к. строковые выражения могут содержать точки..
-						result[key]=item[16+key.length..$];
-						break;
-					case "int_":
-						result[key]=chunks[2].to!int;
-						break;
-					case "bool_":
-						result[key]=chunks[2].to!bool;
-						break;
-					case "null_":
-						result[key]=null;
-						break;
-					case "float_":
-						//наверное с флоатом тоже, что и со строкой, т.к. точки
-						result[key]=item[16+key.length..$].to!float;
-						break;
-					case "array":
-						depthA[key]~=item[(8+chunks[1].indexOf("!"))..$];
-						break;
-					case "object":
-						depthO[key]~=item[(8+chunks[1].indexOf("!"))..$];
-						break;
-					default:break;
+			foreach (string item; tags)
+			{
+				string[] chunks = item.split(".");
+				string key = chunks[1].split("!")[0];
+				string valType = chunks[1].split("!")[1];
+				switch (valType)
+				{
+				case "string":
+					//в чистом виде сплит не очень, т.к. строковые выражения могут содержать точки..
+					result[key] = item[16 + key.length .. $];
+					break;
+				case "int_":
+					result[key] = chunks[2].to!int;
+					break;
+				case "bool_":
+					result[key] = chunks[2].to!bool;
+					break;
+				case "null_":
+					result[key] = null;
+					break;
+				case "float_":
+					//наверное с флоатом тоже, что и со строкой, т.к. точки
+					result[key] = item[16 + key.length .. $].to!float;
+					break;
+				case "array":
+					depthA[key] ~= item[(8 + chunks[1].indexOf("!")) .. $];
+					break;
+				case "object":
+					depthO[key] ~= item[(8 + chunks[1].indexOf("!")) .. $];
+					break;
+				default:
+					break;
 				}
 			}
-			if(depthA.length>0){
-				foreach(string key,val;depthA)
-					result[key]=deserializeTags(val);
+			if (depthA.length > 0)
+			{
+				foreach (string key, val; depthA)
+					result[key] = deserializeTags(val);
 			}
-			if(depthO.length>0){
-				foreach(string key,val;depthO)
-					result[key]=deserializeTags(val);
+			if (depthO.length > 0)
+			{
+				foreach (string key, val; depthO)
+					result[key] = deserializeTags(val);
 			}
 			return result;
 		}
 	}
 	return Json.emptyObject;
 }
-string resolveGroup(string name, string url, string authKey){
-	string group="";
+
+string resolveGroup(string name, string url, string authKey)
+{
+	string group = "";
 	Json resp;
-	try{
+	try
+	{
 		requestHTTP(url,
-		(scope req){
+			(scope req) {
 			req.method = HTTPMethod.POST;
-			req.writeJsonBody(["group":name,"authKey":authKey]);
+			req.writeJsonBody(["group": name, "authKey": authKey]);
 		},
-		(scope res){
-			resp=res.readJson;
-			if(resp["status"].type!=Json.Type.undefined&&resp["status"].type!=Json.Type.Int&&resp["status"].get!string=="success"){
-				group=resp["group"].get!string;
+			(scope res) {
+			resp = res.readJson;
+			if (resp["status"].type != Json.Type.undefined && resp["status"].type != Json.Type.Int && resp["status"]
+			.get!string == "success")
+			{
+				group = resp["group"].get!string;
 			}
 		});
-	}catch(Exception e){
+	}
+	catch (Exception e)
+	{
 		writeln("^#######");
 		writeln(e);
 		writeln(resp);
