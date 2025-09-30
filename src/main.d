@@ -120,8 +120,6 @@ void httpEventHandler(HTTPServerRequest req, HTTPServerResponse res)
 			//writeln("Invoke tags "~tags.toString());
 			subscriptions = groups[group_name].findSubscriptionsForInvoke(tags);
 		}
-		if (subscriptions.length < 1)
-			break;
 
 		foreach (Bus.BSubscription subscription; subscriptions)
 		{
@@ -204,10 +202,10 @@ void handleConn(scope WebSocket sock)
 						["data": Json]
 				*/
 				data = parseJsonString(msg);
-				writeln("// Websocket: ");
-				writeln(data);
 				if (data["alive"].type != Json.Type.undefined)
 					continue;
+				writeln("// Websocket: ");
+				writeln(data);
 				seqID = data["seq"].get!string;
 			}
 			catch (Exception e)
