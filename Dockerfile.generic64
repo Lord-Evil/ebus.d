@@ -1,0 +1,6 @@
+# docker build -t ebus -f Dockerfile.generic64 .
+FROM ubuntu
+WORKDIR /app
+COPY ./config.json.sample ./config.json
+COPY ./ebus-d-generic64 ./ebus-d
+CMD ["./ebus-d"]
