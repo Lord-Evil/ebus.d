@@ -12,6 +12,7 @@ import core.sync.mutex : Mutex;
 BGroup[string] groups;
 Json config;
 Mutex groupsMutex;
+bool debugLog = false;
 
 void main()
 {
@@ -26,6 +27,10 @@ void main()
 		throw new Exception("Missing 'bind' in config.json");
 	if (config["auth"].type == Json.Type.undefined)
 		throw new Exception("Missing 'auth' in config.json");
+	if (config["debug"].type == Json.Type.undefined)
+		debugLog = false;
+	else
+		debugLog = config["debug"].get!bool;
 
 	groupsMutex = new Mutex();
 	writeln("// Server started!");
@@ -82,10 +87,12 @@ void httpEventHandler(HTTPServerRequest req, HTTPServerResponse res)
 	{
 	case "invoke":
 		SysTime today = Clock.currTime();
-		writeln("// Invoke for group " ~ group_name);
-		writeln("// ", today);
+		if(debugLog){
+			writeln("// Invoke for group " ~ group_name);
+			writeln("// ", today);
+		}
 		Json data = req.json;
-		writeln(data);
+		if(debugLog) writeln(data);
 
 		Json busMsg = Json.emptyObject;
 		if (config["auth"].get!bool)
@@ -178,7 +185,8 @@ string[string] reGroup;
 
 void handleConn(scope WebSocket sock)
 {
-	writeln("// Websocket: Incoming connection! " ~ sock.request.clientAddress.to!string ~ " " ~ sock
+	if(debugLog)
+		writeln("// Websocket: Incoming connection! " ~ sock.request.clientAddress.to!string ~ " " ~ sock
 			.request.headers["Sec-WebSocket-Key"]);
 	//writeln(sock.request.headers);
 	//m_socks.insert(sock); // Commented out - unused
@@ -204,8 +212,8 @@ void handleConn(scope WebSocket sock)
 				data = parseJsonString(msg);
 				if (data["alive"].type != Json.Type.undefined)
 					continue;
-				writeln("// Websocket: ");
-				writeln(data);
+				if(debugLog) writeln("// Websocket: ");
+				if(debugLog) writeln(data);
 				seqID = data["seq"].get!string;
 			}
 			catch (Exception e)
@@ -252,7 +260,7 @@ void handleConn(scope WebSocket sock)
 					{
 					case "join":
 						//no real purpose, could be used for member count or auth (via tokens etc)
-						writeln("// Websocket: Join group " ~ group_name);
+						if(debugLog) writeln("// Websocket: Join group " ~ group_name);
 						break;
 					case "subscribe":
 						if (data["tags"].type == Json.Type.undefined)
@@ -268,7 +276,7 @@ void handleConn(scope WebSocket sock)
 							if (!m_groups.canFind(group_name))
 								m_groups ~= group_name;
 						}
-						writeln("// Websocket: Subscribe for tags " ~ tags.toString());
+						if(debugLog) writeln("// Websocket: Subscribe for tags " ~ tags.toString());
 						break;
 					case "request":
 						//TODO - to implement
@@ -281,7 +289,7 @@ void handleConn(scope WebSocket sock)
 						if (data["tags"].type == Json.Type.undefined)
 							break;
 						Json tags = data["tags"];
-						writeln("// Websocket: Invoke tags " ~ tags.toString());
+						if(debugLog) writeln("// Websocket: Invoke tags " ~ tags.toString());
 
 						BSubscription[] subs;
 						synchronized (groupsMutex)
@@ -362,7 +370,7 @@ void handleConn(scope WebSocket sock)
 	{
 		writeln("// Websocket: !!!!!The most unexpected thing happened: " ~ e.msg);
 	}
-	writeln("// Websocket: Connection closed! " ~ sock.request.clientAddress.to!string ~ " " ~ sock
+	if(debugLog) writeln("// Websocket: Connection closed! " ~ sock.request.clientAddress.to!string ~ " " ~ sock
 			.request.headers["Sec-WebSocket-Key"]);
 
 	// Remove subscriber from all subscriptions
@@ -384,7 +392,7 @@ void handleConn(scope WebSocket sock)
 				if (groups[group_name].isEmpty())
 				{
 					groups.remove(group_name);
-					writeln("// Cleaned up empty group: " ~ group_name);
+					if(debugLog) writeln("// Cleaned up empty group: " ~ group_name);
 
 					// Clean up reGroup mapping (memory leak fix)
 					if (group_name in reGroup)
